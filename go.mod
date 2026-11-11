@@ -1,6 +1,6 @@
 module github.com/seifreed/renfecli
 
-go 1.26.6
+go 1.26.11
 
 require (
 	github.com/BurntSushi/toml v1.6.0
