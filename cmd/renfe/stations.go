@@ -55,7 +55,6 @@ func loadStations(cl *client.Client, force bool, correlationIDs ...string) ([]cl
 			stderrEventFor(correlationID, slog.LevelWarn, "station catalogue refresh failed; using stale cache", "component", "store", "station_count", len(cached.Stations), "age_ms", age.Milliseconds(), "error_type", fmt.Sprintf("%T", err))
 			return cached.Stations, nil
 		}
-		stderrEventFor(correlationID, slog.LevelError, "station catalogue unavailable", "component", "store", "outcome", "error", "duration_ms", time.Since(started).Milliseconds())
 		return nil, err
 	}
 	if err := store.Save(stationsCache, stationsFile{FetchedAt: time.Now(), Stations: fresh}); err != nil {

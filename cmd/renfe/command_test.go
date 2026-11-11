@@ -120,6 +120,29 @@ func TestStationCacheWriteFailureIsWarnedAndDoesNotFailLoad(t *testing.T) {
 	}
 }
 
+func TestStationFetchFailureIsLeftToCommandErrorBoundary(t *testing.T) {
+	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	cl := client.New()
+	cl.HTTP = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusForbidden, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("private upstream response")), Request: req}, nil
+	})}
+	var loadErr error
+	stderr := captureStderr(t, func() {
+		_, loadErr = loadStations(cl, false, "correlation-test")
+	})
+	if loadErr == nil {
+		t.Fatal("station fetch unexpectedly succeeded")
+	}
+	if status, ok := client.HTTPStatus(loadErr); !ok || status != http.StatusForbidden {
+		t.Fatalf("HTTP status was lost: %v", loadErr)
+	}
+	if stderr != "" {
+		t.Fatalf("terminal failure logged here as well as at the command boundary: %s", stderr)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return fn(req) }
