@@ -710,6 +710,28 @@ func TestJSONLogRedactsSensitiveAttributeKeys(t *testing.T) {
 	}
 }
 
+func TestMalformedConfigWarningDoesNotExposeCookie(t *testing.T) {
+	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	const cookie = "private-config-cookie"
+	contents := "[auth]\ncookie = \"" + cookie + "\"\n[defaults\n"
+	if err := os.WriteFile(store.Path("config.toml"), []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stderr := captureStderr(t, func() { _ = loadConfig("correlation-test") })
+	if strings.Contains(stderr, cookie) {
+		t.Fatalf("malformed config warning exposed credential: %s", stderr)
+	}
+	var event map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stderr)), &event); err != nil {
+		t.Fatalf("invalid config warning: %v\n%s", err, stderr)
+	}
+	if event["event_name"] != "configuration_could_not_be_read_using_defaults" || event["level"] != "WARN" || event["error_type"] == nil || event["correlation_id"] != "correlation-test" {
+		t.Fatalf("configuration warning lacks safe diagnostic fields: %#v", event)
+	}
+}
+
 func TestConcurrentStructuredLogsRemainValidRecords(t *testing.T) {
 	t.Setenv("RENFE_LOG_FORMAT", "json")
 	t.Setenv("RENFE_LOG_LEVEL", "debug")
