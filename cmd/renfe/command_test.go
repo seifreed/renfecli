@@ -405,6 +405,8 @@ func TestRunWithoutCommandIsRejectedWithWarning(t *testing.T) {
 	}
 }
 
+func panicWithSensitivePayload() int { panic(errors.New("sensitive panic payload")) }
+
 func TestUnhandledCommandPanicIsCriticalAndCorrelated(t *testing.T) {
 	t.Setenv("RENFE_LOG_FORMAT", "json")
 	t.Setenv("RENFE_LOG_LEVEL", "info")
@@ -412,8 +414,7 @@ func TestUnhandledCommandPanicIsCriticalAndCorrelated(t *testing.T) {
 	var code int
 	stderr := captureStderr(t, func() {
 		code = runWithPanicRecovery(correlationID, "test", time.Now(), func() int {
-			panic(errors.New("sensitive panic payload"))
-			return 0
+			return panicWithSensitivePayload()
 		})
 	})
 	if code != 2 {
