@@ -26,10 +26,11 @@ Los errores de excepción DWR y respuestas con formato inesperado tampoco incluy
 
 La prueba concurrente ejecuta 48 emisores en paralelo, valida cada línea JSON y unicidad de IDs; se repite 10 veces con `go test -race`. Las pruebas confirman timestamp UTC, selección y nombre de niveles, redacción de claves sensibles, eliminación de caracteres de control, validación del ID de correlación, cookie omitida de errores de config malformada, clasificación de autenticación, flags inválidos observables, ayuda exitosa, rechazo de comandos desconocidos, fallos de escritura del catálogo y que un 403 conserva estado/correlación sin filtrar el cuerpo remoto ni duplicarse en la capa de carga. La prueba de flujo completo ejecuta `search` contra Renfe simulado y verifica que los eventos de inicio/fin, caché y HTTP compartan el mismo `correlation_id`. Las salidas JSON deben conservar un evento por línea incluso ante saltos de línea remotos.
 
-Ejemplo JSON:
+Ejemplo real de `RENFE_LOG_FORMAT=json RENFE_LOG_LEVEL=info go run ./cmd/renfe version`:
 
 ```json
-{"time":"2026-11-11T12:00:00Z","level":"WARN","msg":"HTTP request throttled; retrying","service":"renfecli","event_name":"http_request_throttled_retrying","component":"client","status":429,"operation":"search","attempt":1,"max_attempts":3,"retry_after_ms":500}
+{"time":"2026-11-11T17:15:11.448995Z","level":"INFO","msg":"command started","service":"renfecli","event_name":"command_started","component":"cli","operation":"version","correlation_id":"de8be63e3c3e72e48c8c46d1759ecde6"}
+{"time":"2026-11-11T17:15:11.4492Z","level":"INFO","msg":"command completed","service":"renfecli","event_name":"command_completed","component":"cli","operation":"version","outcome":"success","duration_ms":0,"correlation_id":"de8be63e3c3e72e48c8c46d1759ecde6"}
 ```
 
 Para diagnosticar: enviar stderr a la herramienta del sistema; usar `RENFE_LOG_FORMAT=json` para ingestión y `RENFE_LOG_LEVEL=debug` cuando existan eventos de diagnóstico de ese nivel. No hay rotación de archivos ni destino remoto: los opera el entorno que lanza el proceso.
@@ -40,7 +41,7 @@ Además del ciclo de vida de comandos, la cobertura incluye resultados HTTP en D
 
 ## Revisión intermedia
 
-Tras estructurar avisos sensibles, propagar correlación a través del comando, cliente y almacenamiento, probar concurrencia, corregir vulnerabilidades alcanzables, ocultar cuerpos DWR y soportar todos los niveles operativos: arquitectura 7, cobertura 9, utilidad 9, estructura 9, correlación 10, seguridad 9, rendimiento 7, configuración 9, errores 9, pruebas 9. Media **8,7/10**. Es una valoración intermedia, no una puntuación final; falta cobertura completa de errores de almacenamiento y pruebas más amplias de privacidad. La seguridad no recibe 10 mientras el escáner informe módulos vulnerables aunque no encuentre trazas alcanzables.
+Tras cerrar correlación de la operación, centralizar redacción, clasificar fallos y eliminar duplicidades: arquitectura 8, cobertura 9, utilidad 9, estructura 9, correlación 10, seguridad 9, rendimiento 8, configuración 9, errores 10, pruebas 9. Media **9,0/10**. Es una valoración intermedia, no una puntuación final; queda ampliar las pruebas de errores de persistencia y privacidad en todos los flujos. Seguridad queda en 9 por el aviso no alcanzable de `x/crypto/openpgp`; rendimiento queda en 8 porque no hay benchmark de coste del logger, aunque la CLI emite pocos eventos y el handler estándar es síncrono.
 
 ## Verificación del repositorio
 
