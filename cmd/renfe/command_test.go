@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/seifreed/renfecli/internal/store"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -75,6 +76,53 @@ func TestCorruptStationCacheIsWarnedWithoutExposingContents(t *testing.T) {
 		t.Fatalf("corrupt cache was not reported safely: %s", stderr)
 	}
 }
+
+func TestStationCacheWriteFailureIsWarnedAndDoesNotFailLoad(t *testing.T) {
+	dir := t.TempDir()
+	configPath := dir + "/not-a-directory"
+	if err := os.WriteFile(configPath, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RENFE_CONFIG_DIR", configPath)
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	cl := client.New()
+	cl.HTTP = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body := `var estacionesEstatico=[{"cdgoEstacion":"60000","desgEstacion":"MADRID","desgEstacionPlano":"MADRID"}];`
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+	})}
+	var stations []client.Station
+	stderr := captureStderr(t, func() {
+		var err error
+		stations, err = loadStations(cl, false, "correlation-test")
+		if err != nil {
+			t.Errorf("cache failure made fresh catalogue unusable: %v", err)
+		}
+	})
+	if len(stations) != 1 || stations[0].Code != "60000" {
+		t.Fatalf("fresh catalogue was lost after cache write failure: %+v", stations)
+	}
+	var found bool
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("invalid structured event: %v\n%s", err, line)
+		}
+		if event["event_name"] == "station_catalogue_cache_write_failed" {
+			found = true
+			if event["level"] != "WARN" || event["error_type"] == nil || event["correlation_id"] != "correlation-test" {
+				t.Errorf("cache write warning lacks safe diagnostic fields: %#v", event)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("cache write failure was not observable: %s", stderr)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return fn(req) }
 
 // --json is the contract agents depend on, so it must stay parseable and carry
 // the fields the human view shows.
