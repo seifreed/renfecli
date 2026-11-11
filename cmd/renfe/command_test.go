@@ -199,6 +199,49 @@ func TestRunCorrelationIDJoinsCommandAndHTTPEvents(t *testing.T) {
 	}
 }
 
+func TestRunHTTPFailureLogsStatusAndCorrelationWithoutRemoteBody(t *testing.T) {
+	const privateBody = "private upstream response"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(privateBody))
+	}))
+	defer srv.Close()
+	withRenfe(t, srv)
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	var code int
+	stderr := captureStderr(t, func() { code = run([]string{"search", "madrid", "barcelona"}) })
+	if code != 1 {
+		t.Fatalf("run returned %d, want failed operation", code)
+	}
+	var startID string
+	var failed map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue // the command also prints a safe human error to stderr
+		}
+		switch event["event_name"] {
+		case "command_started":
+			startID, _ = event["correlation_id"].(string)
+		case "command_failed":
+			failed = event
+		}
+	}
+	if failed == nil {
+		t.Fatalf("failed command event missing: %s", stderr)
+	}
+	if failed["http_status"] != float64(http.StatusForbidden) || failed["error_code"] != "HTTP_403" {
+		t.Errorf("failure event lacks HTTP classification: %#v", failed)
+	}
+	if startID == "" || failed["correlation_id"] != startID {
+		t.Errorf("failure event correlation mismatch: start=%q failed=%#v", startID, failed)
+	}
+	if strings.Contains(stderr, privateBody) {
+		t.Errorf("remote response body leaked into diagnostics: %s", stderr)
+	}
+}
+
 // A round trip arrives in one reply; both directions have to survive the CLI.
 func TestSearchCommandRoundTrip(t *testing.T) {
 	withRenfe(t, replaying(t, "roundtrip.dwr"))

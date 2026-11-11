@@ -67,7 +67,11 @@ func run(args []string) int {
 		return 2
 	}
 	if err != nil {
-		logger().Error("command failed", append([]any{"event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds()}, correlationAttrs(correlationID)...)...)
+		attrs := []any{"event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds()}
+		if status, ok := client.HTTPStatus(err); ok {
+			attrs = append(attrs, "http_status", status, "error_code", fmt.Sprintf("HTTP_%d", status))
+		}
+		logger().Error("command failed", append(attrs, correlationAttrs(correlationID)...)...)
 		fmt.Fprintln(os.Stderr, "error:", safeText(explain(err)))
 		return 1
 	}
