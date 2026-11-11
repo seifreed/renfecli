@@ -37,6 +37,10 @@ func (c *Client) SessionRemaining() (time.Duration, error) {
 var sessionGoneCodes = []string{"U014", "Debe volver a iniciar la sesi"}
 
 func isSessionGone(err error) bool {
+	var dwrErr dwrExceptionError
+	if errors.As(err, &dwrErr) {
+		return dwrErr.sessionExpired
+	}
 	msg := err.Error()
 	for _, code := range sessionGoneCodes {
 		if strings.Contains(msg, code) {

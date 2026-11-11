@@ -360,16 +360,3 @@ func (c *Client) cookie(name string) string {
 	}
 	return ""
 }
-
-// truncate caps s to n runes (with an ellipsis), never splitting a multibyte
-// rune — error bodies are UTF-8 JSON/HTML and a byte cut would emit invalid UTF-8.
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n]) + "…"
-}

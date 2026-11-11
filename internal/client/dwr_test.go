@@ -56,8 +56,17 @@ r.handleException("0","0",{javaClassName:"java.lang.RuntimeException",message:"s
 	if err == nil {
 		t.Fatal("decodeDWR on an exception reply = nil error, want failure")
 	}
-	if !strings.Contains(err.Error(), "sesion caducada") {
-		t.Errorf("error should carry the server message, got %v", err)
+	if strings.Contains(err.Error(), "sesion caducada") || err.Error() != "Renfe returned an application error" {
+		t.Errorf("error should hide the remote response body, got %v", err)
+	}
+}
+
+func TestDecodeDWRUnexpectedResponseDoesNotExposeBody(t *testing.T) {
+	const secret = "private-response-content"
+	var out map[string]any
+	err := decodeDWR("<html>"+secret+"</html>", &out)
+	if err == nil || errors.Is(err, ErrQueued) || strings.Contains(err.Error(), secret) {
+		t.Fatalf("unexpected response error leaked body or lost type: %v", err)
 	}
 }
 

@@ -184,9 +184,9 @@ func decodeDWR(script string, out any) error {
 	if i := strings.Index(script, dwrErrMarker); i >= 0 {
 		body, err := sliceCallArg(script, i+len(dwrErrMarker))
 		if err != nil {
-			return fmt.Errorf("dwr exception (unparseable): %s", truncate(script, 300))
+			return dwrExceptionError{}
 		}
-		return fmt.Errorf("dwr exception: %s", truncate(body, 300))
+		return dwrExceptionError{sessionExpired: strings.Contains(body, "U014")}
 	}
 	i := strings.Index(script, dwrReplyMarker)
 	if i < 0 {
@@ -196,7 +196,7 @@ func decodeDWR(script string, out any) error {
 		if isQueuePage(script) {
 			return ErrQueued
 		}
-		return fmt.Errorf("not a DWR reply: %s", truncate(script, 200))
+		return errNotDWRReply
 	}
 	body, err := sliceCallArg(script, i+len(dwrReplyMarker))
 	if err != nil {
@@ -211,6 +211,12 @@ func decodeDWR(script string, out any) error {
 	}
 	return nil
 }
+
+type dwrExceptionError struct{ sessionExpired bool }
+
+func (dwrExceptionError) Error() string { return "Renfe returned an application error" }
+
+var errNotDWRReply = errors.New("renfe returned an unexpected response format")
 
 // sliceCallArg returns the payload argument that starts at script[from]. Most
 // beans answer with an object or array, but some return a bare value — the

@@ -44,7 +44,7 @@ func TestKeepAliveIntervalNeverOversleeps(t *testing.T) {
 
 func TestIsSessionGone(t *testing.T) {
 	gone := []error{
-		errors.New(`dwr exception: {cdgoError:"U014",message:"Ha pasado demasiado tiempo. Debe volver a iniciar la sesión. (U014)"}`),
+		dwrExceptionError{sessionExpired: true},
 		errors.New("Debe volver a iniciar la sesion"),
 	}
 	for _, err := range gone {
