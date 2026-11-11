@@ -214,7 +214,7 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	if err != nil {
 		c.logEvent(slog.LevelDebug, "HTTP request completed", "component", "client", "method", req.Method, "operation", req.URL.Path,
 			"outcome", "transport_error", "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds())
-		return nil, err
+		return nil, requestError{method: req.Method, path: req.URL.Path, cause: err}
 	}
 	defer resp.Body.Close()
 	data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
@@ -235,12 +235,24 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 		c.logEvent(slog.LevelDebug, "HTTP request completed", "component", "client", "method", req.Method, "operation", req.URL.Path,
 			"status", resp.StatusCode, "outcome", "read_error", "error_type", fmt.Sprintf("%T", readErr),
 			"duration_ms", time.Since(started).Milliseconds())
-		return nil, fmt.Errorf("read response body from %s: %w", req.URL, readErr)
+		return nil, requestError{method: req.Method, path: req.URL.Path, cause: readErr}
 	}
 	c.logEvent(slog.LevelDebug, "HTTP request completed", "component", "client", "method", req.Method, "operation", req.URL.Path,
 		"status", resp.StatusCode, "outcome", "success", "duration_ms", time.Since(started).Milliseconds())
 	return data, nil
 }
+
+type requestError struct {
+	method string
+	path   string
+	cause  error
+}
+
+func (e requestError) Error() string {
+	return fmt.Sprintf("HTTP %s %s failed (%T)", e.method, e.path, e.cause)
+}
+
+func (e requestError) Unwrap() error { return e.cause }
 
 // doRetry runs fn, retrying transient throttling (429/503) so a burst of calls —
 // a price calendar sweep, several searches in one session — degrades gracefully

@@ -276,11 +276,39 @@ func TestDoRejectsATruncatedBody(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(srv)
-	req, _ := c.newReq("GET", "/vol/inicio.do", nil, nil)
+	req, _ := c.newReq("GET", "/vol/inicio.do?token=query-secret", nil, nil)
 	if _, err := c.do(req); err == nil {
 		t.Fatal("a short read on a 2xx must be an error")
+	} else if strings.Contains(err.Error(), "query-secret") || !strings.Contains(err.Error(), "/vol/inicio.do") {
+		t.Fatalf("read error exposed URL query or lost operation context: %v", err)
 	}
 }
+
+func TestDoRedactsTransportErrorAndPreservesCause(t *testing.T) {
+	cause := errors.New("dial failed for https://user:password@example.test/?token=secret")
+	c := New()
+	c.HTTP = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, cause })}
+	req, err := http.NewRequest("GET", "https://user:password@example.test/vol/search?ticket=secret-query", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got := c.do(req)
+	if !errors.Is(got, cause) {
+		t.Fatalf("request error lost its cause: %v", got)
+	}
+	for _, secret := range []string{"password", "secret", "secret-query"} {
+		if strings.Contains(got.Error(), secret) {
+			t.Fatalf("request error exposed %q: %v", secret, got)
+		}
+	}
+	if !strings.Contains(got.Error(), "GET /vol/search") {
+		t.Fatalf("request error lacks safe operation context: %v", got)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func newTestClient(srv *httptest.Server) *Client {
 	c := New()
