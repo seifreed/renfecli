@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -608,6 +609,27 @@ func TestLogLevelFiltersEvents(t *testing.T) {
 	})
 	if strings.Contains(stderr, "routine event") || !strings.Contains(stderr, "recoverable issue") {
 		t.Fatalf("WARN threshold did not filter events: %s", stderr)
+	}
+}
+
+func TestTraceAndCriticalLevelsAreConfigurable(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "trace")
+	trace := captureStderr(t, func() {
+		logger().Log(context.Background(), traceLevel, "trace diagnostic")
+		logger().Debug("debug diagnostic")
+		logger().Info("routine event")
+	})
+	if !strings.Contains(trace, `"level":"TRACE"`) || !strings.Contains(trace, "debug diagnostic") || !strings.Contains(trace, "routine event") {
+		t.Fatalf("trace threshold or level name is wrong: %s", trace)
+	}
+	t.Setenv("RENFE_LOG_LEVEL", "critical")
+	critical := captureStderr(t, func() {
+		logger().Error("recoverable failure")
+		logger().Log(context.Background(), criticalLevel, "process compromised")
+	})
+	if strings.Contains(critical, "recoverable failure") || !strings.Contains(critical, `"level":"CRITICAL"`) {
+		t.Fatalf("critical threshold or level name is wrong: %s", critical)
 	}
 }
 

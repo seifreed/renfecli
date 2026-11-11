@@ -16,6 +16,11 @@ import (
 	"github.com/seifreed/renfecli/internal/config"
 )
 
+const (
+	traceLevel    = slog.LevelDebug - 4
+	criticalLevel = slog.LevelError + 4
+)
+
 func stderrEvent(level slog.Level, message string, args ...any) {
 	clean := make([]any, 0, len(args)+2)
 	clean = append(clean, "event_name", normalizedEventName(message))
@@ -102,21 +107,43 @@ func logger() *slog.Logger {
 func newLogger(levelName, format string) *slog.Logger {
 	level := new(slog.LevelVar)
 	switch levelName {
+	case "trace":
+		level.Set(traceLevel)
 	case "debug":
 		level.Set(slog.LevelDebug)
 	case "warn", "warning":
 		level.Set(slog.LevelWarn)
 	case "error":
 		level.Set(slog.LevelError)
+	case "critical", "fatal":
+		level.Set(criticalLevel)
 	default:
 		level.Set(slog.LevelInfo)
 	}
-	opts := &slog.HandlerOptions{Level: level}
+	opts := &slog.HandlerOptions{Level: level, ReplaceAttr: logLevelName}
 	handler := slog.Handler(slog.NewTextHandler(currentStderr{}, opts))
 	if format == "json" {
 		handler = slog.NewJSONHandler(currentStderr{}, opts)
 	}
 	return slog.New(handler.WithAttrs([]slog.Attr{slog.String("service", "renfecli")}))
+}
+
+func logLevelName(_ []string, attr slog.Attr) slog.Attr {
+	if attr.Key != slog.LevelKey {
+		return attr
+	}
+	level, ok := attr.Value.Any().(slog.Level)
+	if !ok {
+		return attr
+	}
+	switch level {
+	case traceLevel:
+		return slog.String(slog.LevelKey, "TRACE")
+	case criticalLevel:
+		return slog.String(slog.LevelKey, "CRITICAL")
+	default:
+		return attr
+	}
 }
 
 // common flags shared by every subcommand.
