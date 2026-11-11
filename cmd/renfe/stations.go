@@ -29,43 +29,44 @@ type stationsFile struct {
 // loadStations returns the station catalogue, from the cache when it is fresh
 // and from renfe.com otherwise. A failed refresh falls back to a stale cache:
 // an offline moment should not stop you resolving "madrid".
-func loadStations(cl *client.Client, force bool) ([]client.Station, error) {
+func loadStations(cl *client.Client, force bool, correlationIDs ...string) ([]client.Station, error) {
+	correlationID := firstCorrelationID(correlationIDs)
 	started := time.Now()
 	var cached stationsFile
 	cacheErr := store.Load(stationsCache, &cached)
 	haveCache := cacheErr == nil && len(cached.Stations) > 0
 	if cacheErr != nil && !errors.Is(cacheErr, os.ErrNotExist) {
-		stderrEvent(slog.LevelWarn, "station catalogue cache could not be read", "component", "store", "error_type", fmt.Sprintf("%T", cacheErr))
+		stderrEventFor(correlationID, slog.LevelWarn, "station catalogue cache could not be read", "component", "store", "error_type", fmt.Sprintf("%T", cacheErr))
 	}
 	// A timestamp in the future — a clock that was wrong when the file was
 	// written, or a hand-edited copy — makes time.Since negative, which would
 	// otherwise read as "fresh" forever.
 	age := time.Since(cached.FetchedAt)
 	if haveCache && !force && age >= 0 && age < stationsMaxAge {
-		stderrEvent(slog.LevelDebug, "station catalogue cache hit", "component", "store", "station_count", len(cached.Stations), "age_ms", age.Milliseconds())
+		stderrEventFor(correlationID, slog.LevelDebug, "station catalogue cache hit", "component", "store", "station_count", len(cached.Stations), "age_ms", age.Milliseconds())
 		return cached.Stations, nil
 	}
 	if force {
-		stderrEvent(slog.LevelDebug, "station catalogue refresh forced", "component", "store")
+		stderrEventFor(correlationID, slog.LevelDebug, "station catalogue refresh forced", "component", "store")
 	}
 	fresh, err := cl.Stations()
 	if err != nil {
 		if haveCache {
-			stderrEvent(slog.LevelWarn, "station catalogue refresh failed; using stale cache", "component", "store", "station_count", len(cached.Stations), "age_ms", age.Milliseconds(), "error_type", fmt.Sprintf("%T", err))
+			stderrEventFor(correlationID, slog.LevelWarn, "station catalogue refresh failed; using stale cache", "component", "store", "station_count", len(cached.Stations), "age_ms", age.Milliseconds(), "error_type", fmt.Sprintf("%T", err))
 			return cached.Stations, nil
 		}
-		stderrEvent(slog.LevelError, "station catalogue unavailable", "component", "store", "outcome", "error", "duration_ms", time.Since(started).Milliseconds())
+		stderrEventFor(correlationID, slog.LevelError, "station catalogue unavailable", "component", "store", "outcome", "error", "duration_ms", time.Since(started).Milliseconds())
 		return nil, err
 	}
 	if err := store.Save(stationsCache, stationsFile{FetchedAt: time.Now(), Stations: fresh}); err != nil {
-		stderrEvent(slog.LevelWarn, "station catalogue cache write failed", "component", "store", "error_type", fmt.Sprintf("%T", err))
+		stderrEventFor(correlationID, slog.LevelWarn, "station catalogue cache write failed", "component", "store", "error_type", fmt.Sprintf("%T", err))
 	} else {
-		stderrEvent(slog.LevelInfo, "station catalogue refreshed", "component", "store", "station_count", len(fresh), "duration_ms", time.Since(started).Milliseconds())
+		stderrEventFor(correlationID, slog.LevelInfo, "station catalogue refreshed", "component", "store", "station_count", len(fresh), "duration_ms", time.Since(started).Milliseconds())
 	}
 	return fresh, nil
 }
 
-func cmdStations(args []string) error {
+func cmdStations(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("stations")
 	update := fs.Bool("update", false, "re-download the catalogue, ignoring the cache")
 	limit := fs.Int("limit", 20, "cap the number of matches shown (0 = no cap)")
@@ -74,8 +75,8 @@ func cmdStations(args []string) error {
 	if err := nonNegative("--limit", *limit); err != nil {
 		return err
 	}
-	cl := newClient(loadConfig())
-	all, err := loadStations(cl, *update)
+	cl := newClient(loadConfig(correlationIDs...), correlationIDs...)
+	all, err := loadStations(cl, *update, correlationIDs...)
 	if err != nil {
 		return err
 	}

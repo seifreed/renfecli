@@ -43,7 +43,7 @@ func addSearchFlags(fs *flag.FlagSet) *searchFlags {
 // configured defaults) and the flags into a client.Query. cmd names the calling
 // command so the "give me a route" error tells the user to re-run the one they
 // actually typed.
-func buildQuery(cmd string, cl *client.Client, cfg config.Config, sf *searchFlags, args []string) (client.Query, error) {
+func buildQuery(cmd string, cl *client.Client, cfg config.Config, sf *searchFlags, args []string, correlationIDs ...string) (client.Query, error) {
 	var q client.Query
 	from, to := cfg.Defaults.Origin, cfg.Defaults.Destination
 	switch len(args) {
@@ -56,7 +56,7 @@ func buildQuery(cmd string, cl *client.Client, cfg config.Config, sf *searchFlag
 	if from == "" || to == "" {
 		return q, fmt.Errorf("need an origin and a destination: renfe %s <origin> <destination> [--date …]", cmd)
 	}
-	stations, err := loadStations(cl, false)
+	stations, err := loadStations(cl, false, correlationIDs...)
 	if err != nil {
 		return q, err
 	}
@@ -121,10 +121,10 @@ func buildQuery(cmd string, cl *client.Client, cfg config.Config, sf *searchFlag
 // build a client, resolve the positional route and the flags into a query, and
 // run the one search all of them are built on. The client comes back because
 // `stops` has a second call to make on the same session.
-func runSearch(cmd string, sf *searchFlags, args []string) (*client.Client, client.Query, *client.Results, error) {
-	cfg := loadConfig()
-	cl := newClient(cfg)
-	q, err := buildQuery(cmd, cl, cfg, sf, args)
+func runSearch(cmd string, sf *searchFlags, args []string, correlationIDs ...string) (*client.Client, client.Query, *client.Results, error) {
+	cfg := loadConfig(correlationIDs...)
+	cl := newClient(cfg, correlationIDs...)
+	q, err := buildQuery(cmd, cl, cfg, sf, args, correlationIDs...)
 	if err != nil {
 		return nil, q, nil, err
 	}
@@ -135,7 +135,7 @@ func runSearch(cmd string, sf *searchFlags, args []string) (*client.Client, clie
 	return cl, q, res, nil
 }
 
-func cmdSearch(args []string) error {
+func cmdSearch(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("search")
 	sf := addSearchFlags(fs)
 	after := fs.String("after", "", "only outbound trains departing at or after this time (HH:MM)")
@@ -151,7 +151,7 @@ func cmdSearch(args []string) error {
 	if err := nonNegative("--limit", *limit); err != nil {
 		return err
 	}
-	_, q, res, err := runSearch("search", sf, fs.Args())
+	_, q, res, err := runSearch("search", sf, fs.Args(), correlationIDs...)
 	if err != nil {
 		return err
 	}

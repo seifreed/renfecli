@@ -29,6 +29,17 @@ func stderrEvent(level slog.Level, message string, args ...any) {
 	logger().Log(context.Background(), level, safeText(message), clean...)
 }
 
+func correlationAttrs(id string) []any {
+	if id == "" {
+		return nil
+	}
+	return []any{"correlation_id", id}
+}
+
+func stderrEventFor(correlationID string, level slog.Level, message string, attrs ...any) {
+	stderrEvent(level, message, append(attrs, correlationAttrs(correlationID)...)...)
+}
+
 func normalizedEventName(message string) string {
 	var b strings.Builder
 	separator := false
@@ -122,8 +133,14 @@ func addCommon(fs *flag.FlagSet) *common {
 const allowSessionEnv = "RENFE_ALLOW_SESSION_ON_CUSTOM_HOST"
 
 // newClient builds a client carrying any stored session.
-func newClient(cfg config.Config) *client.Client {
-	cl := client.New()
+func newClient(cfg config.Config, correlationIDs ...string) *client.Client {
+	correlationID := firstCorrelationID(correlationIDs)
+	var cl *client.Client
+	if len(correlationIDs) > 0 && correlationIDs[0] != "" {
+		cl = client.NewWithCorrelationID(correlationIDs[0])
+	} else {
+		cl = client.New()
+	}
 	cl.LogEvent = stderrEvent
 	// RENFE_BASE_URL points the client at an alternate host (a debugging proxy,
 	// a mock, a replay server) instead of production.
@@ -133,8 +150,8 @@ func newClient(cfg config.Config) *client.Client {
 	// The read commands all work anonymously, so a config cookie that cannot be
 	// installed is a warning rather than the end of the run.
 	if cfg.Auth.Cookie != "" {
-		if err := installSession(cl, cfg.Auth.Cookie); err != nil {
-			stderrEvent(slog.LevelWarn, "configured session cookie ignored", "component", "auth", "error_type", fmt.Sprintf("%T", err))
+		if err := installSession(cl, cfg.Auth.Cookie, correlationID); err != nil {
+			stderrEventFor(correlationID, slog.LevelWarn, "configured session cookie ignored", "component", "auth", "error_type", fmt.Sprintf("%T", err))
 		}
 	}
 	return cl
@@ -150,15 +167,15 @@ func newClient(cfg config.Config) *client.Client {
 // (the jar makes an exception for loopback, which is this machine), but an
 // https one receives them. So a host that is neither Renfe nor this machine
 // does not get the session unless it is explicitly asked for.
-func installSession(cl *client.Client, cookie string) error {
-	if err := sessionAllowedOn(cl.BaseURL); err != nil {
+func installSession(cl *client.Client, cookie string, correlationIDs ...string) error {
+	if err := sessionAllowedOn(cl.BaseURL, correlationIDs...); err != nil {
 		return err
 	}
 	return cl.SetCookies(cookie)
 }
 
 // sessionAllowedOn reports whether a stored credential may be sent to base.
-func sessionAllowedOn(base string) error {
+func sessionAllowedOn(base string, correlationIDs ...string) error {
 	u, err := url.Parse(base)
 	if err != nil || u.Host == "" {
 		return fmt.Errorf("%s is not a usable URL (%q)", "RENFE_BASE_URL", base)
@@ -171,7 +188,7 @@ func sessionAllowedOn(base string) error {
 		// A proxy or mock on this machine is the user's own process.
 		return nil
 	case os.Getenv(allowSessionEnv) == "1":
-		stderrEvent(slog.LevelWarn, "stored session sent to custom host by explicit opt-in", "component", "auth", "host", safeField(u.Host), "override", allowSessionEnv)
+		stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "stored session sent to custom host by explicit opt-in", "component", "auth", "host", safeField(u.Host), "override", allowSessionEnv)
 		return nil
 	}
 	return foreignHost{fmt.Errorf("refusing to send the stored Renfe session to %s: RENFE_BASE_URL "+
@@ -203,12 +220,19 @@ func mustHost(raw string) string {
 // loadConfig reads config.toml, downgrading a read failure to a warning: every
 // command works without a config, and none of them is destructive enough that a
 // broken file should abort the run.
-func loadConfig() config.Config {
+func loadConfig(correlationIDs ...string) config.Config {
 	cfg, err := config.Load()
 	if err != nil {
-		stderrEvent(slog.LevelWarn, "configuration could not be read; using defaults", "component", "config", "error_type", fmt.Sprintf("%T", err))
+		stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "configuration could not be read; using defaults", "component", "config", "error_type", fmt.Sprintf("%T", err))
 	}
 	return cfg
+}
+
+func firstCorrelationID(ids []string) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	return ids[0]
 }
 
 // parseFlags parses args into fs, letting flags appear among positionals (see

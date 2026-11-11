@@ -26,19 +26,19 @@ type session struct {
 
 // loadSession returns the stored Cookie header, preferring an explicit
 // [auth] cookie in config.toml over the cached one from `login`.
-func loadSession(cfg config.Config) string {
+func loadSession(cfg config.Config, correlationIDs ...string) string {
 	if cfg.Auth.Cookie != "" {
-		warnIfOthersCanRead(config.Path())
+		warnIfOthersCanRead(config.Path(), correlationIDs...)
 		return cfg.Auth.Cookie
 	}
 	var s session
 	if err := store.Load(sessionFile, &s); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			stderrEvent(slog.LevelWarn, "stored session could not be read", "component", "store", "operation", "load_session", "error_type", fmt.Sprintf("%T", err))
+			stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "stored session could not be read", "component", "store", "operation", "load_session", "error_type", fmt.Sprintf("%T", err))
 		}
 		return ""
 	}
-	warnIfOthersCanRead(store.Path(sessionFile))
+	warnIfOthersCanRead(store.Path(sessionFile), correlationIDs...)
 	return s.Cookie
 }
 
@@ -51,7 +51,7 @@ func loadSession(cfg config.Config) string {
 // Windows is exempt: access there is an ACL, not a mode. Go's os.Chmod only
 // toggles the read-only flag and Stat reports 0666, so this would fire on every
 // run for every Windows user while saying nothing true about who can read it.
-func warnIfOthersCanRead(path string) {
+func warnIfOthersCanRead(path string, correlationIDs ...string) {
 	if runtime.GOOS == "windows" {
 		return
 	}
@@ -60,26 +60,26 @@ func warnIfOthersCanRead(path string) {
 		return
 	}
 	if perm := info.Mode().Perm(); perm&0o077 != 0 {
-		stderrEvent(slog.LevelWarn, "credential file permissions are too broad", "component", "auth", "mode", fmt.Sprintf("%04o", perm), "recommended_mode", "0600")
+		stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "credential file permissions are too broad", "component", "auth", "mode", fmt.Sprintf("%04o", perm), "recommended_mode", "0600")
 	}
 }
 
 // authClient builds a client carrying the stored session, failing with an
 // actionable message when there is none. newClient already installs an [auth]
 // cookie from config.toml; this only has to add the one `login` cached.
-func authClient() (*client.Client, error) {
-	cfg := loadConfig()
-	cookie := loadSession(cfg)
+func authClient(correlationIDs ...string) (*client.Client, error) {
+	cfg := loadConfig(correlationIDs...)
+	cookie := loadSession(cfg, correlationIDs...)
 	if cookie == "" {
 		return nil, fmt.Errorf("not signed in — run: renfe login --from-browser chrome")
 	}
-	cl := newClient(cfg)
+	cl := newClient(cfg, correlationIDs...)
 	if cookie == cfg.Auth.Cookie {
 		// newClient installed it (or reported why it would not); either way the
 		// gate has already run.
 		return cl, nil
 	}
-	if err := installSession(cl, cookie); err != nil {
+	if err := installSession(cl, cookie, correlationIDs...); err != nil {
 		var fh foreignHost
 		if errors.As(err, &fh) {
 			return nil, err
@@ -89,7 +89,7 @@ func authClient() (*client.Client, error) {
 	return cl, nil
 }
 
-func cmdLogin(args []string) error {
+func cmdLogin(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("login")
 	fromBrowser := fs.String("from-browser", "", "name one browser's cookie store: chrome|chromium|firefox|safari|edge|brave (omit the flag to search every installed browser)")
 	fromStdin := fs.Bool("stdin", false, "read a raw Cookie header from stdin instead")
@@ -107,7 +107,7 @@ func cmdLogin(args []string) error {
 			return fmt.Errorf("nothing on stdin — pipe the Cookie header from your browser's devtools")
 		}
 		if !client.CookieLooksAuthed(cookie) {
-			stderrEvent(slog.LevelWarn, "input cookie header does not look authenticated; storing for verification", "component", "auth", "source", "stdin")
+			stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "input cookie header does not look authenticated; storing for verification", "component", "auth", "source", "stdin")
 		}
 		candidates = []client.BrowserSession{{Browser: "stdin", Cookie: cookie}}
 	default:
@@ -126,7 +126,7 @@ func cmdLogin(args []string) error {
 	// so the copy on disk routinely outlives it. Saving first would let one
 	// stale lift destroy a session that was still working, and stopping at the
 	// first stale one would miss the browser you are actually logged in on.
-	live, name, err := firstLiveSession(newClient(loadConfig()), candidates)
+	live, name, err := firstLiveSession(newClient(loadConfig(correlationIDs...), correlationIDs...), candidates)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func cmdLogin(args []string) error {
 	if err := store.Save(sessionFile, session{Cookie: live.Cookie}); err != nil {
 		return fmt.Errorf("could not store the session: %w", err)
 	}
-	stderrEvent(slog.LevelInfo, "browser session stored", "component", "store", "outcome", "success")
+	stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelInfo, "browser session stored", "component", "store", "outcome", "success")
 	if emitted, err := emitStructured(cf, struct {
 		Name string `json:"name"`
 	}{name}); emitted {
@@ -172,11 +172,11 @@ func firstLiveSession(cl *client.Client, candidates []client.BrowserSession) (cl
 	return client.BrowserSession{}, "", nil
 }
 
-func cmdWhoami(args []string) error {
+func cmdWhoami(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("whoami")
 	parseFlags(fs, args)
 
-	cl, err := authClient()
+	cl, err := authClient(correlationIDs...)
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func cmdWhoami(args []string) error {
 	if err != nil {
 		// The name is the answer to "who am I"; the loyalty card is a bonus and
 		// not every account has one.
-		stderrEvent(slog.LevelWarn, "Renfe card could not be read", "component", "auth", "error_type", fmt.Sprintf("%T", err))
+		stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "Renfe card could not be read", "component", "auth", "error_type", fmt.Sprintf("%T", err))
 		card = &client.Card{}
 	}
 	if emitted, err := emitStructured(cf, struct {
@@ -207,11 +207,11 @@ func cmdWhoami(args []string) error {
 	return nil
 }
 
-func cmdTrips(args []string) error {
+func cmdTrips(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("trips")
 	parseFlags(fs, args)
 
-	cl, err := authClient()
+	cl, err := authClient(correlationIDs...)
 	if err != nil {
 		return err
 	}

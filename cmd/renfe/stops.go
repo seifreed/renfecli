@@ -11,14 +11,14 @@ import (
 // takes a train number on its own: the itinerary bean matches the journey
 // against the list cached in the session, so this searches first and then asks
 // about one of the results.
-func cmdStops(args []string) error {
+func cmdStops(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("stops")
 	sf := addSearchFlags(fs)
 	train := fs.String("train", "", "train number to detail (default: the first journey found)")
 	at := fs.String("at", "", "pick the journey departing at this time (HH:MM)")
 	parseFlags(fs, args)
 
-	cl, _, res, err := runSearch("stops", sf, fs.Args())
+	cl, _, res, err := runSearch("stops", sf, fs.Args(), correlationIDs...)
 	if err != nil {
 		return err
 	}

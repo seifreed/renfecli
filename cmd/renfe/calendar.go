@@ -11,13 +11,13 @@ import (
 // cheapest fare per day for the days around the one you asked for. It is the
 // same one search prints a single line of, and it costs no extra request — the
 // search response already carries it.
-func cmdCalendar(args []string) error {
+func cmdCalendar(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("calendar")
 	sf := addSearchFlags(fs)
 	onlyBest := fs.Bool("cheapest", false, "show only the cheapest day")
 	parseFlags(fs, args)
 
-	_, _, res, err := runSearch("calendar", sf, fs.Args())
+	_, _, res, err := runSearch("calendar", sf, fs.Args(), correlationIDs...)
 	if err != nil {
 		return err
 	}

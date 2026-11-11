@@ -102,6 +102,55 @@ func TestSearchCommandJSON(t *testing.T) {
 	}
 }
 
+func TestRunCorrelationIDJoinsCommandAndHTTPEvents(t *testing.T) {
+	withRenfe(t, replaying(t, "trainslist.dwr"))
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	var stdout string
+	var runErr error
+	stderr := captureStderr(t, func() {
+		stdout, runErr = capture(t, func() error {
+			if code := run([]string{"search", "madrid", "barcelona", "--limit", "1", "--json"}); code != 0 {
+				return fmt.Errorf("run returned %d", code)
+			}
+			return nil
+		})
+	})
+	if runErr != nil {
+		t.Fatalf("command failed: %v\n%s", runErr, stdout)
+	}
+	var commandID string
+	var httpEvents int
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("invalid structured event: %v\n%s", err, line)
+		}
+		id, _ := event["correlation_id"].(string)
+		switch event["event_name"] {
+		case "command_started", "command_completed":
+			if id == "" || (commandID != "" && commandID != id) {
+				t.Fatalf("command events have missing or inconsistent correlation IDs: %#v", event)
+			}
+			commandID = id
+		case "http_request_completed":
+			httpEvents++
+			if id == "" || (commandID != "" && id != commandID) {
+				t.Fatalf("HTTP event not correlated to command: %#v", event)
+			}
+			commandID = id
+		case "station_catalogue_cache_hit":
+			if id == "" || (commandID != "" && id != commandID) {
+				t.Fatalf("storage event not correlated to command: %#v", event)
+			}
+			commandID = id
+		}
+	}
+	if commandID == "" || httpEvents == 0 {
+		t.Fatalf("expected command and HTTP events with a shared ID; stderr=%s", stderr)
+	}
+}
+
 // A round trip arrives in one reply; both directions have to survive the CLI.
 func TestSearchCommandRoundTrip(t *testing.T) {
 	withRenfe(t, replaying(t, "roundtrip.dwr"))

@@ -6,8 +6,6 @@
 package client
 
 import (
-	crand "crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/seifreed/renfecli/internal/observability"
 )
 
 const (
@@ -68,13 +68,18 @@ type Client struct {
 // installed: the whole API is session-stateful — the search form POST stores the
 // route on the server and the DWR calls read it back out.
 func New() *Client {
+	return NewWithCorrelationID(observability.NewCorrelationID())
+}
+
+// NewWithCorrelationID constructs a Client whose diagnostics join a caller operation.
+func NewWithCorrelationID(correlationID string) *Client {
 	jar, _ := cookiejar.New(nil) // the nil-options constructor cannot fail
 	hc := &http.Client{Timeout: 45 * time.Second, Jar: jar}
 	c := &Client{
 		HTTP:          hc,
 		BaseURL:       BaseURL,
 		UserAgent:     DefaultUA,
-		correlationID: newCorrelationID(),
+		correlationID: correlationID,
 	}
 	if tr, err := newChromeTransport(); err == nil {
 		hc.Transport = tr
@@ -94,15 +99,6 @@ func (c *Client) logEvent(level slog.Level, message string, attrs ...any) {
 	} else if c.Logf != nil && level >= slog.LevelWarn {
 		c.Logf("%s %v", message, attrs)
 	}
-}
-
-func newCorrelationID() string {
-	var id [16]byte
-	if _, err := crand.Read(id[:]); err != nil {
-		// Diagnostics remain usable if the system entropy source is unavailable.
-		return ""
-	}
-	return hex.EncodeToString(id[:])
 }
 
 // SetCookies seeds the jar with a raw "name=value; name=value" Cookie header,

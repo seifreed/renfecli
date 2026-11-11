@@ -17,16 +17,16 @@ import (
 // without waking up more often than necessary.
 const keepAliveMargin = 2 * time.Minute
 
-func cmdSession(args []string) error {
+func cmdSession(args []string, correlationIDs ...string) error {
 	sub := ""
 	if len(args) > 0 && len(args[0]) > 0 && args[0][0] != '-' {
 		sub, args = args[0], args[1:]
 	}
 	switch sub {
 	case "", "status":
-		return sessionStatus(args)
+		return sessionStatus(args, correlationIDs...)
 	case "keep":
-		return sessionKeep(args)
+		return sessionKeep(args, correlationIDs...)
 	default:
 		return fmt.Errorf("unknown session command %q — use: renfe session [status|keep]", sub)
 	}
@@ -48,11 +48,11 @@ func newSessionState(name string, left time.Duration) sessionState {
 	}
 }
 
-func sessionStatus(args []string) error {
+func sessionStatus(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("session status")
 	parseFlags(fs, args)
 
-	cl, err := authClient()
+	cl, err := authClient(correlationIDs...)
 	if err != nil {
 		return err
 	}
@@ -98,14 +98,14 @@ func sessionStatus(args []string) error {
 // It deliberately never calls sesionManager.extendSession: that runs
 // regenerarSesion server-side, fails with U014 outside the expiry warning
 // window, and the login was gone immediately afterwards during testing.
-func sessionKeep(args []string) error {
+func sessionKeep(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("session keep")
 	every := fs.Duration("every", 0, "fixed refresh interval; default is adaptive, just before each lapse")
 	forDur := fs.Duration("for", 0, "stop after this long (default: until interrupted)")
 	quiet := fs.Bool("quiet", false, "only report problems")
 	parseFlags(fs, args)
 
-	cl, err := authClient()
+	cl, err := authClient(correlationIDs...)
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func sessionKeep(args []string) error {
 				return err
 			}
 			// A transient network blip should not end a long-running keep-alive.
-			stderrEvent(slog.LevelWarn, "session refresh failed; retrying", "component", "session", "error_type", fmt.Sprintf("%T", err), "retry_after_ms", time.Minute.Milliseconds())
+			stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "session refresh failed; retrying", "component", "session", "error_type", fmt.Sprintf("%T", err), "retry_after_ms", time.Minute.Milliseconds())
 			left = 3 * time.Minute
 		} else {
 			// The servlet session outlives the login, so a keep-alive that only
@@ -142,7 +142,7 @@ func sessionKeep(args []string) error {
 			case werr != nil:
 				// Could not confirm either way; say so and try again next tick
 				// rather than reporting a session we did not verify.
-				stderrEvent(slog.LevelWarn, "session login check failed; retrying", "component", "session", "error_type", fmt.Sprintf("%T", werr))
+				stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "session login check failed; retrying", "component", "session", "error_type", fmt.Sprintf("%T", werr))
 			case name == "":
 				return fmt.Errorf("the login expired (the HTTP session is still alive) — " +
 					"sign in again in your browser, then: renfe login --from-browser chrome")
@@ -163,7 +163,7 @@ func sessionKeep(args []string) error {
 			wait = *every
 		}
 		if verified {
-			stderrEvent(slog.LevelDebug, "session keepalive verified", "component", "session", "remaining_ms", left.Milliseconds(), "next_check_ms", wait.Milliseconds())
+			stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelDebug, "session keepalive verified", "component", "session", "remaining_ms", left.Milliseconds(), "next_check_ms", wait.Milliseconds())
 		}
 		timer := time.NewTimer(wait)
 		select {

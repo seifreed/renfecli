@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/seifreed/renfecli/internal/client"
+	"github.com/seifreed/renfecli/internal/observability"
 )
 
 // Build metadata, injected at release time via -ldflags.
@@ -36,25 +37,26 @@ func run(args []string) int {
 	}
 	started := time.Now()
 	operation := safeField(args[0])
-	logger().Info("command started", "event_name", "command_started", "component", "cli", "operation", operation)
+	correlationID := observability.NewCorrelationID()
+	logger().Info("command started", append([]any{"event_name", "command_started", "component", "cli", "operation", operation}, correlationAttrs(correlationID)...)...)
 	var err error
 	switch args[0] {
 	case "search":
-		err = cmdSearch(args[1:])
+		err = cmdSearch(args[1:], correlationID)
 	case "calendar":
-		err = cmdCalendar(args[1:])
+		err = cmdCalendar(args[1:], correlationID)
 	case "stops":
-		err = cmdStops(args[1:])
+		err = cmdStops(args[1:], correlationID)
 	case "stations":
-		err = cmdStations(args[1:])
+		err = cmdStations(args[1:], correlationID)
 	case "login":
-		err = cmdLogin(args[1:])
+		err = cmdLogin(args[1:], correlationID)
 	case "whoami":
-		err = cmdWhoami(args[1:])
+		err = cmdWhoami(args[1:], correlationID)
 	case "trips":
-		err = cmdTrips(args[1:])
+		err = cmdTrips(args[1:], correlationID)
 	case "session":
-		err = cmdSession(args[1:])
+		err = cmdSession(args[1:], correlationID)
 	case "version", "--version", "-v":
 		fmt.Println(versionString())
 	case "help", "-h", "--help":
@@ -65,11 +67,11 @@ func run(args []string) int {
 		return 2
 	}
 	if err != nil {
-		logger().Error("command failed", "event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds())
+		logger().Error("command failed", append([]any{"event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds()}, correlationAttrs(correlationID)...)...)
 		fmt.Fprintln(os.Stderr, "error:", safeText(explain(err)))
 		return 1
 	}
-	logger().Info("command completed", "event_name", "command_completed", "component", "cli", "operation", operation, "outcome", "success", "duration_ms", time.Since(started).Milliseconds())
+	logger().Info("command completed", append([]any{"event_name", "command_completed", "component", "cli", "operation", operation, "outcome", "success", "duration_ms", time.Since(started).Milliseconds()}, correlationAttrs(correlationID)...)...)
 	return 0
 }
 
