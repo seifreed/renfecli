@@ -83,7 +83,7 @@ func New() *Client {
 func (c *Client) logEvent(level slog.Level, message string, attrs ...any) {
 	if c.LogEvent != nil {
 		c.LogEvent(level, message, attrs...)
-	} else if c.Logf != nil {
+	} else if c.Logf != nil && level >= slog.LevelWarn {
 		c.Logf("%s %v", message, attrs)
 	}
 }
@@ -204,6 +204,7 @@ func (c *Client) newReq(method, path string, body io.Reader, extra map[string]st
 // into an *APIError carrying that body and any Retry-After. The single place
 // requests are executed and HTTP errors are mapped.
 func (c *Client) do(req *http.Request) ([]byte, error) {
+	started := time.Now()
 	c.warnOnce.Do(func() {
 		if c.transportErr != nil {
 			c.logEvent(slog.LevelWarn, "TLS transport fallback", "error_type", fmt.Sprintf("%T", c.transportErr))
@@ -211,11 +212,15 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	})
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
+		c.logEvent(slog.LevelDebug, "HTTP request completed", "method", req.Method, "operation", req.URL.Path,
+			"outcome", "transport_error", "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds())
 		return nil, err
 	}
 	defer resp.Body.Close()
 	data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		c.logEvent(slog.LevelDebug, "HTTP request completed", "method", req.Method, "operation", req.URL.Path,
+			"status", resp.StatusCode, "outcome", "http_error", "duration_ms", time.Since(started).Milliseconds())
 		// On a non-2xx, surface whatever body we managed to read as error context
 		// (best effort) — the status is the actionable signal, not the read error.
 		return nil, &APIError{
@@ -227,8 +232,13 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	// A 2xx whose body read failed mid-stream must not pass as success: the DWR
 	// payload would parse as "truncated" at best and silently short at worst.
 	if readErr != nil {
+		c.logEvent(slog.LevelDebug, "HTTP request completed", "method", req.Method, "operation", req.URL.Path,
+			"status", resp.StatusCode, "outcome", "read_error", "error_type", fmt.Sprintf("%T", readErr),
+			"duration_ms", time.Since(started).Milliseconds())
 		return nil, fmt.Errorf("read response body from %s: %w", req.URL, readErr)
 	}
+	c.logEvent(slog.LevelDebug, "HTTP request completed", "method", req.Method, "operation", req.URL.Path,
+		"status", resp.StatusCode, "outcome", "success", "duration_ms", time.Since(started).Milliseconds())
 	return data, nil
 }
 
