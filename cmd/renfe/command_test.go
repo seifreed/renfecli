@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -645,6 +646,9 @@ func TestSessionKeepEmitsARecordPerRefresh(t *testing.T) {
 }
 
 func TestRunSessionKeepSignalCompletesAsCancelled(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Process.Signal(os.Interrupt) is not implemented on Windows")
+	}
 	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
 	t.Setenv("RENFE_LOG_FORMAT", "json")
 	t.Setenv("RENFE_LOG_LEVEL", "info")
