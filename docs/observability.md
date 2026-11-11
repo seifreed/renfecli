@@ -27,3 +27,7 @@ Para diagnosticar: enviar stderr a la herramienta del sistema; usar `RENFE_LOG_F
 ## Limitaciones conocidas
 
 Además del ciclo de vida de comandos, la cobertura incluye fallos de recuperación y avisos existentes; no se han añadido logs por cada petición HTTP correcta porque generarían ruido y el CLI no expone un modo verbose. No hay correlación/tracing, métricas, sampling ni buffering asíncrono; una única ejecución local no justifica esas dependencias. `slog` estándar permite niveles y salida estructurada, pero parte de los eventos de recuperación siguen siendo mensajes heredados, no un esquema operacional completo. Por ello no se reclama 10/10.
+
+## Revisión intermedia
+
+Tras añadir eventos de ciclo de vida, reintentos estructurados y niveles WARN para condiciones recuperables: arquitectura 6, cobertura 5, utilidad 6, estructura 7, correlación 2, seguridad 7, rendimiento 5, configuración 6, errores 6, pruebas 7. Media **5,7/10**. Es una valoración intermedia, no una puntuación final; aún faltan pruebas de seguridad/inyección y cobertura de operaciones HTTP fallidas/correctas.

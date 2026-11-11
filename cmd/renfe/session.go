@@ -129,7 +129,7 @@ func sessionKeep(args []string) error {
 				return err
 			}
 			// A transient network blip should not end a long-running keep-alive.
-			stderrLogf("refresh failed (%v) — retrying in 1m", err)
+			stderrWarnf("refresh failed (%v) — retrying in 1m", err)
 			left = 3 * time.Minute
 		} else {
 			// The servlet session outlives the login, so a keep-alive that only
@@ -140,7 +140,7 @@ func sessionKeep(args []string) error {
 			case werr != nil:
 				// Could not confirm either way; say so and try again next tick
 				// rather than reporting a session we did not verify.
-				stderrLogf("could not check the login (%v) — will retry", werr)
+				stderrWarnf("could not check the login (%v) — will retry", werr)
 			case name == "":
 				return fmt.Errorf("the login expired (the HTTP session is still alive) — " +
 					"sign in again in your browser, then: renfe login --from-browser chrome")

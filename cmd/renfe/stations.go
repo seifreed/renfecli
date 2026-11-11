@@ -39,14 +39,14 @@ func loadStations(cl *client.Client, force bool) ([]client.Station, error) {
 	fresh, err := cl.Stations()
 	if err != nil {
 		if haveCache {
-			stderrLogf("station catalogue refresh failed (%v) — using the cached copy from %s",
+			stderrWarnf("station catalogue refresh failed (%v) — using the cached copy from %s",
 				err, cached.FetchedAt.Format(time.DateOnly))
 			return cached.Stations, nil
 		}
 		return nil, err
 	}
 	if err := store.Save(stationsCache, stationsFile{FetchedAt: time.Now(), Stations: fresh}); err != nil {
-		stderrLogf("could not cache the station catalogue: %v", err)
+		stderrWarnf("could not cache the station catalogue: %v", err)
 	}
 	return fresh, nil
 }

@@ -14,11 +14,11 @@ import (
 	"github.com/seifreed/renfecli/internal/config"
 )
 
-// stderrLogf routes diagnostics (client retries, transport fallback, CLI-side
-// warnings) to stderr, prefixed, so they never mix with --json data on stdout.
+// stderrWarnf routes recoverable diagnostics (client retries, transport fallback, CLI-side
+// warnings) to stderr, so they never mix with --json data on stdout.
 // It is a var so tests can capture what would be logged.
-var stderrLogf = func(format string, args ...any) {
-	logger().Info(safeText(fmt.Sprintf(format, args...)))
+var stderrWarnf = func(format string, args ...any) {
+	logger().Warn(safeText(fmt.Sprintf(format, args...)))
 }
 
 func stderrEvent(level slog.Level, message string, args ...any) {
@@ -104,7 +104,7 @@ func newClient(cfg config.Config) *client.Client {
 	// installed is a warning rather than the end of the run.
 	if cfg.Auth.Cookie != "" {
 		if err := installSession(cl, cfg.Auth.Cookie); err != nil {
-			stderrLogf("ignoring [auth] cookie in config.toml: %v", err)
+			stderrWarnf("ignoring [auth] cookie in config.toml: %v", err)
 		}
 	}
 	return cl
@@ -141,7 +141,7 @@ func sessionAllowedOn(base string) error {
 		// A proxy or mock on this machine is the user's own process.
 		return nil
 	case os.Getenv(allowSessionEnv) == "1":
-		stderrLogf("sending the stored Renfe session to %s because %s=1", u.Host, allowSessionEnv)
+		stderrWarnf("sending the stored Renfe session to %s because %s=1", u.Host, allowSessionEnv)
 		return nil
 	}
 	return foreignHost{fmt.Errorf("refusing to send the stored Renfe session to %s: RENFE_BASE_URL "+
@@ -176,7 +176,7 @@ func mustHost(raw string) string {
 func loadConfig() config.Config {
 	cfg, err := config.Load()
 	if err != nil {
-		stderrLogf("config.toml could not be read (%v) — using defaults", err)
+		stderrWarnf("config.toml could not be read (%v) — using defaults", err)
 	}
 	return cfg
 }

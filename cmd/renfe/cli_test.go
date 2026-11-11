@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/seifreed/renfecli/internal/store"
+	"log/slog"
 	"os"
 	"reflect"
 	"strconv"
@@ -594,5 +595,16 @@ func TestRunEmitsStructuredLifecycleWithoutArguments(t *testing.T) {
 	})
 	if !strings.Contains(stderr, `"operation":"version"`) || !strings.Contains(stderr, `"duration_ms":`) || strings.Contains(stderr, "sensitive-argument") {
 		t.Fatalf("unexpected lifecycle logs: %s", stderr)
+	}
+}
+
+func TestLogLevelFiltersEvents(t *testing.T) {
+	t.Setenv("RENFE_LOG_LEVEL", "warn")
+	stderr := captureStderr(t, func() {
+		stderrEvent(slog.LevelInfo, "routine event")
+		stderrEvent(slog.LevelWarn, "recoverable issue", "detail", "retrying")
+	})
+	if strings.Contains(stderr, "routine event") || !strings.Contains(stderr, "recoverable issue") {
+		t.Fatalf("WARN threshold did not filter events: %s", stderr)
 	}
 }
