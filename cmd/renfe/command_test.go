@@ -287,6 +287,41 @@ func TestRunMissingSessionUsesStableAuthenticationErrorCode(t *testing.T) {
 	t.Fatalf("authentication failure event missing: %s", stderr)
 }
 
+func TestRunCorrelatesSafeStoredSessionWarning(t *testing.T) {
+	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	const secret = "private-stored-cookie"
+	if err := os.WriteFile(store.Path(sessionFile), []byte(`{"cookie":"`+secret+`",broken`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var code int
+	stderr := captureStderr(t, func() { code = run([]string{"trips"}) })
+	if code != 1 || strings.Contains(stderr, secret) {
+		t.Fatalf("corrupt session result was unsafe or successful: code=%d stderr=%s", code, stderr)
+	}
+	var commandID string
+	var warningID string
+	var errorCode string
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var event map[string]any
+		if json.Unmarshal([]byte(line), &event) != nil {
+			continue
+		}
+		switch event["event_name"] {
+		case "command_started":
+			commandID, _ = event["correlation_id"].(string)
+		case "stored_session_could_not_be_read":
+			warningID, _ = event["correlation_id"].(string)
+		case "command_failed":
+			errorCode, _ = event["error_code"].(string)
+		}
+	}
+	if commandID == "" || warningID != commandID || errorCode != "AUTH_REQUIRED" {
+		t.Fatalf("stored session flow lacks correlated diagnostics: %s", stderr)
+	}
+}
+
 func TestRunInvalidFlagEmitsCorrelatedFailure(t *testing.T) {
 	t.Setenv("RENFE_LOG_FORMAT", "json")
 	t.Setenv("RENFE_LOG_LEVEL", "info")
