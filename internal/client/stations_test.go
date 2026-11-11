@@ -238,3 +238,17 @@ func TestUnsupportedStoresAreNotCountedAsFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestCookieStoreReadErrorRedactsPathAndUnwrapsCauses(t *testing.T) {
+	cause := fmt.Errorf("cannot read /Users/alice/Library/Cookies: %w", fs.ErrPermission)
+	err := cookieStoreReadError{browser: "chrome", causes: []error{cause}}
+	if strings.Contains(err.Error(), "/Users/alice") || strings.Contains(err.Error(), "Cookies:") {
+		t.Fatalf("cookie store error exposed local path: %v", err)
+	}
+	if !strings.Contains(err.Error(), "first error type: *fmt.wrapError") {
+		t.Fatalf("cookie store error lacks a safe diagnostic type: %v", err)
+	}
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("cookie store error did not preserve cause: %v", err)
+	}
+}

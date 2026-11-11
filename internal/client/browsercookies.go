@@ -156,16 +156,27 @@ func CookiesFromBrowser(browser string) ([]BrowserSession, error) {
 		where = browser
 	}
 	if len(readErrs) > 0 {
-		return nil, fmt.Errorf("no signed-in Renfe session found in %s, and %d cookie "+
-			"store(s) that do exist could not be read (first: %v) — if that is the browser "+
-			"you use, this process may not be allowed to read it (on macOS, a keychain "+
-			"prompt); otherwise sign in at venta.renfe.com first",
-			where, len(readErrs), readErrs[0])
+		return nil, cookieStoreReadError{browser: where, causes: readErrs}
 	}
 	return nil, fmt.Errorf("no signed-in Renfe session found in %s — "+
 		"log in at venta.renfe.com in that browser first "+
 		"(or pass --from-browser <chrome|firefox|safari|edge|brave>)", where)
 }
+
+type cookieStoreReadError struct {
+	browser string
+	causes  []error
+}
+
+func (e cookieStoreReadError) Error() string {
+	firstType := "unknown"
+	if len(e.causes) > 0 {
+		firstType = fmt.Sprintf("%T", e.causes[0])
+	}
+	return fmt.Sprintf("no signed-in Renfe session found in %s, and %d cookie store(s) could not be read (first error type: %s) — if this is the browser you use, check its read/keychain permissions; otherwise sign in at venta.renfe.com first", e.browser, len(e.causes), firstType)
+}
+
+func (e cookieStoreReadError) Unwrap() []error { return e.causes }
 
 // CookieLooksAuthed reports whether a Cookie header carries both halves of a
 // signed-in session. It is a cheap local check, not proof: only `renfe whoami`
