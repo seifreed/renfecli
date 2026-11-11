@@ -269,12 +269,18 @@ func TestCalendarCheapestWithNothingOnSale(t *testing.T) {
 func TestSessionKeepEmitsARecordPerRefresh(t *testing.T) {
 	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
 	t.Setenv("RENFE_BASE_URL", sessionServer(t, "MARC RIVERO", 25*time.Minute).URL)
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
 	if err := store.Save(sessionFile, session{Cookie: "JSESSIONID=x; SSOInfo=y"}); err != nil {
 		t.Fatal(err)
 	}
 
-	out, err := capture(t, func() error {
-		return sessionKeep([]string{"--json", "--for", "60ms"})
+	var out string
+	var err error
+	stderr := captureStderr(t, func() {
+		out, err = capture(t, func() error {
+			return sessionKeep([]string{"--json", "--for", "60ms"})
+		})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -293,6 +299,9 @@ func TestSessionKeepEmitsARecordPerRefresh(t *testing.T) {
 	}
 	if !rec.SignedIn || rec.Name != "MARC RIVERO" || rec.Seconds <= 0 {
 		t.Errorf("hollow record: %+v", rec)
+	}
+	if !strings.Contains(stderr, `"msg":"session keepalive verified"`) || strings.Contains(stderr, "MARC RIVERO") {
+		t.Errorf("keepalive diagnostic missing or leaked identity: %s", stderr)
 	}
 }
 

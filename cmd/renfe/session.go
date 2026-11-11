@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -124,12 +125,13 @@ func sessionKeep(args []string) error {
 
 	for {
 		left, err := cl.SessionRemaining()
+		verified := false
 		if err != nil {
 			if errors.Is(err, client.ErrSessionExpired) {
 				return err
 			}
 			// A transient network blip should not end a long-running keep-alive.
-			stderrWarnf("refresh failed (%v) — retrying in 1m", err)
+			stderrEvent(slog.LevelWarn, "session refresh failed; retrying", "component", "session", "error_type", fmt.Sprintf("%T", err), "retry_after_ms", time.Minute.Milliseconds())
 			left = 3 * time.Minute
 		} else {
 			// The servlet session outlives the login, so a keep-alive that only
@@ -140,23 +142,28 @@ func sessionKeep(args []string) error {
 			case werr != nil:
 				// Could not confirm either way; say so and try again next tick
 				// rather than reporting a session we did not verify.
-				stderrWarnf("could not check the login (%v) — will retry", werr)
+				stderrEvent(slog.LevelWarn, "session login check failed; retrying", "component", "session", "error_type", fmt.Sprintf("%T", werr))
 			case name == "":
 				return fmt.Errorf("the login expired (the HTTP session is still alive) — " +
 					"sign in again in your browser, then: renfe login --from-browser chrome")
-			case cf.structured():
-				if eerr := emitStream(cf, newSessionState(name, left)); eerr != nil {
-					return eerr
+			case name != "":
+				verified = true
+				if cf.structured() {
+					if eerr := emitStream(cf, newSessionState(name, left)); eerr != nil {
+						return eerr
+					}
+				} else if !*quiet {
+					fmt.Printf("%s  session ok, expires in %s\n", time.Now().Format("15:04:05"), client.FormatRemaining(left))
 				}
-			case !*quiet:
-				fmt.Printf("%s  session ok, expires in %s\n",
-					time.Now().Format("15:04:05"), client.FormatRemaining(left))
 			}
 		}
 
 		wait := client.KeepAliveInterval(left, keepAliveMargin)
 		if *every > 0 {
 			wait = *every
+		}
+		if verified {
+			stderrEvent(slog.LevelDebug, "session keepalive verified", "component", "session", "remaining_ms", left.Milliseconds(), "next_check_ms", wait.Milliseconds())
 		}
 		timer := time.NewTimer(wait)
 		select {
