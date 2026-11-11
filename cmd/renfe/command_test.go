@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/seifreed/renfecli/internal/store"
 	"io"
@@ -401,6 +402,30 @@ func TestRunWithoutCommandIsRejectedWithWarning(t *testing.T) {
 	}
 	if !strings.Contains(stderr, `"correlation_id":"`) {
 		t.Fatalf("missing command warning lacked correlation: %s", stderr)
+	}
+}
+
+func TestUnhandledCommandPanicIsCriticalAndCorrelated(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	const correlationID = "0123456789abcdef0123456789abcdef"
+	var code int
+	stderr := captureStderr(t, func() {
+		code = runWithPanicRecovery(correlationID, "test", time.Now(), func() int {
+			panic(errors.New("sensitive panic payload"))
+			return 0
+		})
+	})
+	if code != 2 {
+		t.Fatalf("panic exit code = %d, want 2", code)
+	}
+	for _, want := range []string{`"level":"CRITICAL"`, `"event_name":"command_panicked"`, `"error_type":"*errors.errorString"`, `"stack_trace":`, `"correlation_id":"` + correlationID + `"`} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("panic event missing %q: %s", want, stderr)
+		}
+	}
+	if strings.Contains(stderr, "sensitive panic payload") {
+		t.Fatalf("panic payload leaked into logs: %s", stderr)
 	}
 }
 

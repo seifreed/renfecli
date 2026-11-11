@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -43,6 +44,25 @@ func run(args []string) int {
 	started := time.Now()
 	operation := safeField(args[0])
 	correlationID := observability.NewCorrelationID()
+	return runWithPanicRecovery(correlationID, operation, started, func() int {
+		return runCommand(args, correlationID, operation, started)
+	})
+}
+
+func runWithPanicRecovery(correlationID, operation string, started time.Time, runCommand func() int) (exitCode int) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logger().Log(context.Background(), criticalLevel, "unhandled command panic",
+				"event_name", "command_panicked", "component", "cli", "operation", operation,
+				"error_type", fmt.Sprintf("%T", recovered), "stack_trace", safeText(string(debug.Stack())),
+				"duration_ms", time.Since(started).Milliseconds(), "correlation_id", correlationID)
+			exitCode = 2
+		}
+	}()
+	return runCommand()
+}
+
+func runCommand(args []string, correlationID, operation string, started time.Time) int {
 	logger().Info("command started", append([]any{"event_name", "command_started", "component", "cli", "operation", operation}, correlationAttrs(correlationID)...)...)
 	var err error
 	switch args[0] {
