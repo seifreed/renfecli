@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0   # --generate-notes needs the history to diff against
+          fetch-depth: 0   # fetch the annotated tag carrying the release notes
       - name: create the draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -36,7 +36,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --draft \
             --verify-tag \
-            --generate-notes \
+            --notes-from-tag \
             --title "$GITHUB_REF_NAME"
 
   build:
