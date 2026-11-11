@@ -413,9 +413,7 @@ func TestUnhandledCommandPanicIsCriticalAndCorrelated(t *testing.T) {
 	const correlationID = "0123456789abcdef0123456789abcdef"
 	var code int
 	stderr := captureStderr(t, func() {
-		code = runWithPanicRecovery(correlationID, "test", time.Now(), func() int {
-			return panicWithSensitivePayload()
-		})
+		code = runWithPanicRecovery(correlationID, "test", time.Now(), panicWithSensitivePayload)
 	})
 	if code != 2 {
 		t.Fatalf("panic exit code = %d, want 2", code)
