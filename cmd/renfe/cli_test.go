@@ -710,6 +710,24 @@ func TestJSONLogRedactsSensitiveAttributeKeys(t *testing.T) {
 	}
 }
 
+func TestTextLogRedactsSensitiveValuesAndEscapesNewlines(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "text")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	const secret = "private-password"
+	stderr := captureStderr(t, func() {
+		stderrEvent(slog.LevelWarn, "remote warning", "password", secret, "detail", "remote\nforged event")
+	})
+	if lines := strings.Split(strings.TrimSpace(stderr), "\n"); len(lines) != 1 {
+		t.Fatalf("untrusted text injected a second text log record: %q", stderr)
+	}
+	if strings.Contains(stderr, secret) || !strings.Contains(stderr, "password=[REDACTED]") || !strings.Contains(stderr, `detail="remote\nforged event"`) {
+		t.Fatalf("text log did not redact or escape untrusted values: %s", stderr)
+	}
+	if !strings.Contains(stderr, "time=") || !strings.Contains(stderr, "Z ") {
+		t.Fatalf("text log timestamp is not UTC: %s", stderr)
+	}
+}
+
 func TestMalformedConfigWarningDoesNotExposeCookie(t *testing.T) {
 	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
 	t.Setenv("RENFE_LOG_FORMAT", "json")
