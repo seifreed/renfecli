@@ -202,6 +202,18 @@ func TestHTTPEventsSharePerClientCorrelationID(t *testing.T) {
 	}
 }
 
+func TestNewWithCorrelationIDAcceptsOnlyBoundedHexIDs(t *testing.T) {
+	valid := "0123456789abcdef0123456789abcdef"
+	if got := NewWithCorrelationID(valid).correlationID; got != valid {
+		t.Fatalf("valid correlation ID changed: %q", got)
+	}
+	for _, id := range []string{"bad\nvalue", strings.Repeat("a", 1<<20), "not-hex-0123456789abcdef01234567"} {
+		if got := NewWithCorrelationID(id).correlationID; got != "" {
+			t.Errorf("invalid correlation ID was accepted: %q", got)
+		}
+	}
+}
+
 // HTTPStatus is the documented way to branch on a status, so it has to see
 // through a wrapped error and say no to anything that is not an APIError.
 func TestHTTPStatus(t *testing.T) {

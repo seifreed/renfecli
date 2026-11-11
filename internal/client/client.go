@@ -6,6 +6,7 @@
 package client
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -73,6 +74,11 @@ func New() *Client {
 
 // NewWithCorrelationID constructs a Client whose diagnostics join a caller operation.
 func NewWithCorrelationID(correlationID string) *Client {
+	if len(correlationID) != 32 {
+		correlationID = ""
+	} else if _, err := hex.DecodeString(correlationID); err != nil {
+		correlationID = ""
+	}
 	jar, _ := cookiejar.New(nil) // the nil-options constructor cannot fail
 	hc := &http.Client{Timeout: 45 * time.Second, Jar: jar}
 	c := &Client{
