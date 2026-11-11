@@ -19,6 +19,7 @@ import (
 )
 
 var errInvalidFlags = errors.New("invalid flags")
+var errGracefulCancellation = errors.New("command cancelled")
 
 const (
 	traceLevel    = slog.LevelDebug - 4

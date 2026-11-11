@@ -361,6 +361,7 @@ func TestCommandErrorCodesClassifyOperationalFailures(t *testing.T) {
 		{"invalid flags", errInvalidFlags, "INVALID_FLAGS"},
 		{"authentication", errAuthenticationRequired, "AUTH_REQUIRED"},
 		{"store write", errStoreWriteFailed, "STORE_WRITE_FAILED"},
+		{"graceful cancellation", errGracefulCancellation, "CANCELLED"},
 		{"session expiry", fmt.Errorf("wrapped: %w", client.ErrSessionExpired), "SESSION_EXPIRED"},
 		{"timeout", context.DeadlineExceeded, "TIMEOUT"},
 		{"cancellation", context.Canceled, "CANCELLED"},
@@ -600,6 +601,58 @@ func TestSessionKeepEmitsARecordPerRefresh(t *testing.T) {
 	}
 	if !strings.Contains(stderr, `"msg":"session keepalive verified"`) || strings.Contains(stderr, "MARC RIVERO") {
 		t.Errorf("keepalive diagnostic missing or leaked identity: %s", stderr)
+	}
+}
+
+func TestRunSessionKeepSignalCompletesAsCancelled(t *testing.T) {
+	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	dwrReady := make(chan struct{})
+	dwrCount := 0
+	who := dwrPayload(t, "MARC RIVERO")
+	ms := dwrPayload(t, (25 * time.Minute).Milliseconds())
+	srv := renfeServer(t, func(path string) []byte {
+		dwrCount++
+		if dwrCount == 2 {
+			close(dwrReady)
+		}
+		if strings.Contains(path, "checkSession") {
+			return ms
+		}
+		return who
+	})
+	t.Setenv("RENFE_BASE_URL", srv.URL)
+	if err := store.Save(sessionFile, session{Cookie: "JSESSIONID=x; SSOInfo=y"}); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		<-dwrReady
+		time.Sleep(25 * time.Millisecond)
+		process, _ := os.FindProcess(os.Getpid())
+		_ = process.Signal(os.Interrupt)
+	}()
+	var code int
+	stderr := captureStderr(t, func() { code = run([]string{"session", "keep", "--quiet", "--every", "1h"}) })
+	if code != 0 {
+		t.Fatalf("graceful signal returned code %d: %s", code, stderr)
+	}
+	var startedID string
+	var cancelled bool
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("invalid lifecycle event: %v\n%s", err, line)
+		}
+		if event["event_name"] == "command_started" {
+			startedID, _ = event["correlation_id"].(string)
+		}
+		if event["event_name"] == "command_completed" {
+			cancelled = event["outcome"] == "cancelled" && event["error_code"] == "CANCELLED" && event["correlation_id"] == startedID
+		}
+	}
+	if startedID == "" || !cancelled {
+		t.Fatalf("signal termination was not correlated as cancellation: %s", stderr)
 	}
 }
 

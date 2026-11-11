@@ -176,7 +176,7 @@ func sessionKeep(args []string, correlationIDs ...string) error {
 			if !*quiet && !cf.structured() {
 				fmt.Println("stopped")
 			}
-			return nil
+			return errGracefulCancellation
 		case <-deadline:
 			timer.Stop()
 			if !*quiet && !cf.structured() {

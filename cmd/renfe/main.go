@@ -74,6 +74,10 @@ func run(args []string) int {
 		logger().Info("command completed", append([]any{"event_name", "command_completed", "component", "cli", "operation", operation, "outcome", "success", "duration_ms", time.Since(started).Milliseconds()}, correlationAttrs(correlationID)...)...)
 		return 0
 	}
+	if errors.Is(err, errGracefulCancellation) {
+		logger().Info("command completed", append([]any{"event_name", "command_completed", "component", "cli", "operation", operation, "outcome", "cancelled", "error_code", "CANCELLED", "duration_ms", time.Since(started).Milliseconds()}, correlationAttrs(correlationID)...)...)
+		return 0
+	}
 	if err != nil {
 		attrs := []any{"event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds()}
 		if code := commandErrorCode(err); code != "" {
@@ -98,6 +102,8 @@ func commandErrorCode(err error) string {
 		return "AUTH_REQUIRED"
 	case errors.Is(err, errStoreWriteFailed):
 		return "STORE_WRITE_FAILED"
+	case errors.Is(err, errGracefulCancellation):
+		return "CANCELLED"
 	case errors.Is(err, client.ErrSessionExpired):
 		return "SESSION_EXPIRED"
 	case errors.Is(err, context.DeadlineExceeded):
