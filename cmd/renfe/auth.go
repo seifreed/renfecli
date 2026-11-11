@@ -19,6 +19,8 @@ import (
 // user-authored config.toml so rewriting it never touches hand-edited settings.
 const sessionFile = "session.json"
 
+var errAuthenticationRequired = errors.New("authentication required")
+
 // session is what `login` stores and the account commands read back.
 type session struct {
 	Cookie string `json:"cookie"`
@@ -71,7 +73,7 @@ func authClient(correlationIDs ...string) (*client.Client, error) {
 	cfg := loadConfig(correlationIDs...)
 	cookie := loadSession(cfg, correlationIDs...)
 	if cookie == "" {
-		return nil, fmt.Errorf("not signed in — run: renfe login --from-browser chrome")
+		return nil, fmt.Errorf("%w — run: renfe login --from-browser chrome", errAuthenticationRequired)
 	}
 	cl := newClient(cfg, correlationIDs...)
 	if cookie == cfg.Auth.Cookie {
@@ -189,7 +191,7 @@ func cmdWhoami(args []string, correlationIDs ...string) error {
 		return err
 	}
 	if name == "" {
-		return fmt.Errorf("the stored session is no longer signed in — run: renfe login --from-browser chrome")
+		return fmt.Errorf("%w — the stored session is no longer signed in; run: renfe login --from-browser chrome", errAuthenticationRequired)
 	}
 	card, err := cl.Card()
 	if err != nil {

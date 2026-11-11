@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/seifreed/renfecli/internal/store"
@@ -265,6 +266,27 @@ func TestRunHTTPFailureLogsStatusAndCorrelationWithoutRemoteBody(t *testing.T) {
 	}
 }
 
+func TestRunMissingSessionUsesStableAuthenticationErrorCode(t *testing.T) {
+	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	var code int
+	stderr := captureStderr(t, func() { code = run([]string{"trips"}) })
+	if code != 1 {
+		t.Fatalf("run returned %d, want authentication failure", code)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var event map[string]any
+		if json.Unmarshal([]byte(line), &event) == nil && event["event_name"] == "command_failed" {
+			if event["error_code"] != "AUTH_REQUIRED" || event["operation"] != "trips" || event["correlation_id"] == "" {
+				t.Fatalf("authentication failure lacks stable diagnostics: %#v", event)
+			}
+			return
+		}
+	}
+	t.Fatalf("authentication failure event missing: %s", stderr)
+}
+
 func TestRunInvalidFlagEmitsCorrelatedFailure(t *testing.T) {
 	t.Setenv("RENFE_LOG_FORMAT", "json")
 	t.Setenv("RENFE_LOG_LEVEL", "info")
@@ -292,6 +314,27 @@ func TestRunInvalidFlagEmitsCorrelatedFailure(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "flag provided but not defined") {
 		t.Fatalf("actionable usage error missing: %s", stderr)
+	}
+}
+
+func TestCommandErrorCodesClassifyOperationalFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"invalid flags", errInvalidFlags, "INVALID_FLAGS"},
+		{"authentication", errAuthenticationRequired, "AUTH_REQUIRED"},
+		{"session expiry", fmt.Errorf("wrapped: %w", client.ErrSessionExpired), "SESSION_EXPIRED"},
+		{"timeout", context.DeadlineExceeded, "TIMEOUT"},
+		{"cancellation", context.Canceled, "CANCELLED"},
+		{"http status", &client.APIError{Status: 403}, "HTTP_403"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := commandErrorCode(tc.err); got != tc.want {
+				t.Errorf("commandErrorCode(%v) = %q, want %q", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 

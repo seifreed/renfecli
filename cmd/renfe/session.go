@@ -148,8 +148,8 @@ func sessionKeep(args []string, correlationIDs ...string) error {
 				// rather than reporting a session we did not verify.
 				stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelWarn, "session login check failed; retrying", "component", "session", "error_type", fmt.Sprintf("%T", werr))
 			case name == "":
-				return fmt.Errorf("the login expired (the HTTP session is still alive) — " +
-					"sign in again in your browser, then: renfe login --from-browser chrome")
+				return fmt.Errorf("%w — the login expired (the HTTP session is still alive); "+
+					"sign in again in your browser, then: renfe login --from-browser chrome", errAuthenticationRequired)
 			case name != "":
 				verified = true
 				if cf.structured() {

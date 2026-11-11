@@ -9,6 +9,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -75,11 +76,11 @@ func run(args []string) int {
 	}
 	if err != nil {
 		attrs := []any{"event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds()}
-		if errors.Is(err, errInvalidFlags) {
-			attrs = append(attrs, "error_code", "INVALID_FLAGS")
+		if code := commandErrorCode(err); code != "" {
+			attrs = append(attrs, "error_code", code)
 		}
 		if status, ok := client.HTTPStatus(err); ok {
-			attrs = append(attrs, "http_status", status, "error_code", fmt.Sprintf("HTTP_%d", status))
+			attrs = append(attrs, "http_status", status)
 		}
 		logger().Error("command failed", append(attrs, correlationAttrs(correlationID)...)...)
 		fmt.Fprintln(os.Stderr, "error:", safeText(explain(err)))
@@ -87,6 +88,25 @@ func run(args []string) int {
 	}
 	logger().Info("command completed", append([]any{"event_name", "command_completed", "component", "cli", "operation", operation, "outcome", "success", "duration_ms", time.Since(started).Milliseconds()}, correlationAttrs(correlationID)...)...)
 	return 0
+}
+
+func commandErrorCode(err error) string {
+	switch {
+	case errors.Is(err, errInvalidFlags):
+		return "INVALID_FLAGS"
+	case errors.Is(err, errAuthenticationRequired):
+		return "AUTH_REQUIRED"
+	case errors.Is(err, client.ErrSessionExpired):
+		return "SESSION_EXPIRED"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "TIMEOUT"
+	case errors.Is(err, context.Canceled):
+		return "CANCELLED"
+	}
+	if status, ok := client.HTTPStatus(err); ok {
+		return fmt.Sprintf("HTTP_%d", status)
+	}
+	return ""
 }
 
 // explain turns the statuses Renfe answers with into something a person can act
