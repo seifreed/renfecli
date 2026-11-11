@@ -208,8 +208,11 @@ func TestWarnsAboutACredentialFileOthersCanRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	warned = captureStderr(t, func() { loadSession(config.Config{}) })
-	if !strings.Contains(warned, "0644") || !strings.Contains(warned, "can read it") {
+	if !strings.Contains(warned, "mode=0644") || !strings.Contains(warned, "credential file permissions are too broad") {
 		t.Errorf("a world-readable credential went unmentioned: %q", warned)
+	}
+	if strings.Contains(warned, path) || strings.Contains(warned, "JSESSIONID=x") {
+		t.Errorf("credential warning exposed its path or contents: %q", warned)
 	}
 	// Warning, never failing: the session still works.
 	if got := loadSession(config.Config{}); got == "" {

@@ -60,8 +60,7 @@ func warnIfOthersCanRead(path string) {
 		return
 	}
 	if perm := info.Mode().Perm(); perm&0o077 != 0 {
-		stderrWarnf("%s holds a session cookie and is mode %04o — other users on this machine "+
-			"can read it; chmod 600 %s", path, perm, path)
+		stderrEvent(slog.LevelWarn, "credential file permissions are too broad", "component", "auth", "mode", fmt.Sprintf("%04o", perm), "recommended_mode", "0600")
 	}
 }
 
@@ -108,7 +107,7 @@ func cmdLogin(args []string) error {
 			return fmt.Errorf("nothing on stdin — pipe the Cookie header from your browser's devtools")
 		}
 		if !client.CookieLooksAuthed(cookie) {
-			stderrWarnf("that header has no signed-in session cookie; storing it anyway — check with: renfe whoami")
+			stderrEvent(slog.LevelWarn, "input cookie header does not look authenticated; storing for verification", "component", "auth", "source", "stdin")
 		}
 		candidates = []client.BrowserSession{{Browser: "stdin", Cookie: cookie}}
 	default:
@@ -192,7 +191,7 @@ func cmdWhoami(args []string) error {
 	if err != nil {
 		// The name is the answer to "who am I"; the loyalty card is a bonus and
 		// not every account has one.
-		stderrWarnf("could not read the +Renfe card: %v", err)
+		stderrEvent(slog.LevelWarn, "Renfe card could not be read", "component", "auth", "error_type", fmt.Sprintf("%T", err))
 		card = &client.Card{}
 	}
 	if emitted, err := emitStructured(cf, struct {
