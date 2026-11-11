@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -169,6 +170,35 @@ func TestHTTPCompletionDiagnosticExcludesURLQuery(t *testing.T) {
 	if gotMessage != "HTTP request completed" || !strings.Contains(joined, "/status") ||
 		!strings.Contains(joined, "duration_ms") || strings.Contains(joined, "private") {
 		t.Fatalf("unsafe or incomplete HTTP event: %s %v", gotMessage, gotAttrs)
+	}
+}
+
+func TestHTTPEventsSharePerClientCorrelationID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }))
+	defer srv.Close()
+	c := newTestClient(srv)
+	var ids []string
+	c.LogEvent = func(_ slog.Level, _ string, attrs ...any) {
+		for i := 0; i+1 < len(attrs); i += 2 {
+			if attrs[i] == "correlation_id" {
+				ids = append(ids, attrs[i+1].(string))
+			}
+		}
+	}
+	for _, path := range []string{"/first", "/second"} {
+		req, err := c.newReq("GET", path, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.do(req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(ids) != 2 || ids[0] == "" || ids[0] != ids[1] {
+		t.Fatalf("client request correlation IDs differ or are missing: %v", ids)
+	}
+	if decoded, err := hex.DecodeString(ids[0]); err != nil || len(decoded) != 16 {
+		t.Fatalf("correlation ID is not a 128-bit hex value: %q", ids[0])
 	}
 }
 

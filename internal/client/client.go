@@ -6,6 +6,8 @@
 package client
 
 import (
+	crand "crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +38,8 @@ type Client struct {
 	HTTP      *http.Client
 	BaseURL   string
 	UserAgent string
+	// correlationID ties HTTP diagnostics emitted by this client instance together.
+	correlationID string
 
 	// Logf, when set, receives human-readable diagnostics about otherwise-silent
 	// resilience events (throttle retries, transport fallback). Diagnostics belong
@@ -67,9 +71,10 @@ func New() *Client {
 	jar, _ := cookiejar.New(nil) // the nil-options constructor cannot fail
 	hc := &http.Client{Timeout: 45 * time.Second, Jar: jar}
 	c := &Client{
-		HTTP:      hc,
-		BaseURL:   BaseURL,
-		UserAgent: DefaultUA,
+		HTTP:          hc,
+		BaseURL:       BaseURL,
+		UserAgent:     DefaultUA,
+		correlationID: newCorrelationID(),
 	}
 	if tr, err := newChromeTransport(); err == nil {
 		hc.Transport = tr
@@ -82,10 +87,22 @@ func New() *Client {
 // logEvent sends diagnostics to the structured hook, falling back for older callers.
 func (c *Client) logEvent(level slog.Level, message string, attrs ...any) {
 	if c.LogEvent != nil {
+		if c.correlationID != "" {
+			attrs = append([]any{"correlation_id", c.correlationID}, attrs...)
+		}
 		c.LogEvent(level, message, attrs...)
 	} else if c.Logf != nil && level >= slog.LevelWarn {
 		c.Logf("%s %v", message, attrs)
 	}
+}
+
+func newCorrelationID() string {
+	var id [16]byte
+	if _, err := crand.Read(id[:]); err != nil {
+		// Diagnostics remain usable if the system entropy source is unavailable.
+		return ""
+	}
+	return hex.EncodeToString(id[:])
 }
 
 // SetCookies seeds the jar with a raw "name=value; name=value" Cookie header,
