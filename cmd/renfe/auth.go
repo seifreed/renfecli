@@ -33,6 +33,9 @@ func loadSession(cfg config.Config) string {
 	}
 	var s session
 	if err := store.Load(sessionFile, &s); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			stderrEvent(slog.LevelWarn, "stored session could not be read", "component", "store", "operation", "load_session", "error_type", fmt.Sprintf("%T", err))
+		}
 		return ""
 	}
 	warnIfOthersCanRead(store.Path(sessionFile))

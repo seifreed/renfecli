@@ -28,8 +28,8 @@ Para diagnosticar: enviar stderr a la herramienta del sistema; usar `RENFE_LOG_F
 
 ## Limitaciones conocidas
 
-Además del ciclo de vida de comandos, la cobertura incluye fallos de recuperación y avisos existentes; no se han añadido logs por cada petición HTTP correcta porque generarían ruido y el CLI no expone un modo verbose. No hay correlación/tracing, métricas, sampling ni buffering asíncrono; una única ejecución local no justifica esas dependencias. `slog` estándar permite niveles y salida estructurada, pero parte de los eventos de recuperación siguen siendo mensajes heredados, no un esquema operacional completo. Por ello no se reclama 10/10.
+Además del ciclo de vida de comandos, la cobertura incluye resultados HTTP en DEBUG, fallos de recuperación, persistencia de sesión y caché de estaciones. No hay correlación/tracing ni métricas; una única ejecución local no justifica infraestructura distribuida. No hay buffering asíncrono ni rotación local; stdout/stderr quedan bajo control del proceso supervisor. Algunos diagnósticos aún son mensajes heredados, así que el esquema operacional no está completo. Por ello no se reclama 10/10.
 
 ## Revisión intermedia
 
-Tras añadir eventos de ciclo de vida, eventos HTTP DEBUG, reintentos estructurados, niveles WARN y pruebas de serialización/redacción: arquitectura 6, cobertura 6, utilidad 7, estructura 8, correlación 2, seguridad 8, rendimiento 6, configuración 6, errores 7, pruebas 8. Media **6,4/10**. Es una valoración intermedia, no una puntuación final; falta correlación, instrumentación de operaciones de almacenamiento, políticas documentadas completas y más pruebas de fallos y privacidad.
+Tras añadir eventos de ciclo de vida, eventos HTTP DEBUG, persistencia/caché, niveles WARN y pruebas de serialización/redacción: arquitectura 6, cobertura 7, utilidad 7, estructura 8, correlación 2, seguridad 8, rendimiento 6, configuración 7, errores 8, pruebas 9. Media **6,8/10**. Es una valoración intermedia, no una puntuación final; falta correlación, instrumentación de todas las operaciones semánticas de almacenamiento y más pruebas de fallos, concurrencia y privacidad.

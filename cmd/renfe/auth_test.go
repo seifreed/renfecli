@@ -31,6 +31,31 @@ func runLogin(t *testing.T, cookie string, args ...string) error {
 	return cmdLogin(append([]string{"--stdin"}, args...))
 }
 
+func TestLoadSessionLogsCorruptStoreButNotMissingFile(t *testing.T) {
+	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	var cfg config.Config
+	missing := captureStderr(t, func() {
+		if got := loadSession(cfg); got != "" {
+			t.Fatalf("missing session = %q", got)
+		}
+	})
+	if missing != "" {
+		t.Fatalf("missing session should be a normal state: %s", missing)
+	}
+	if err := os.WriteFile(store.Path(sessionFile), []byte(`{"cookie":"secret-cookie", broken`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	corrupt := captureStderr(t, func() {
+		if got := loadSession(cfg); got != "" {
+			t.Fatalf("corrupt session = %q", got)
+		}
+	})
+	if !strings.Contains(corrupt, `"operation":"load_session"`) || !strings.Contains(corrupt, `"level":"WARN"`) || strings.Contains(corrupt, "secret-cookie") {
+		t.Fatalf("corrupt store warning is missing or unsafe: %s", corrupt)
+	}
+}
+
 // A browser keeps a dead session's cookies on disk, so `login` regularly reads
 // cookies the server no longer accepts. It must verify before it stores, or one
 // stale lift silently destroys a session that was still working.
