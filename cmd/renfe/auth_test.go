@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -104,6 +105,47 @@ func TestLoginStoresAnAcceptedSession(t *testing.T) {
 	if got.Cookie != "JSESSIONID=fresh; SSOInfo=fresh" {
 		t.Errorf("stored %q", got.Cookie)
 	}
+}
+
+func TestRunLoginStoreFailureLogsSafeClassification(t *testing.T) {
+	blockedDir := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockedDir, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RENFE_CONFIG_DIR", blockedDir)
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	t.Setenv("RENFE_BASE_URL", signedInAs(t, "MARC RIVERO").URL)
+	const cookie = "JSESSIONID=private; SSOInfo=private"
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalStdin := os.Stdin
+	os.Stdin = reader
+	t.Cleanup(func() { os.Stdin = originalStdin })
+	go func() {
+		_, _ = writer.WriteString(cookie)
+		_ = writer.Close()
+	}()
+	var code int
+	stderr := captureStderr(t, func() { code = run([]string{"login", "--stdin"}) })
+	if code != 1 {
+		t.Fatalf("run returned %d, want storage failure", code)
+	}
+	if strings.Contains(stderr, cookie) {
+		t.Fatalf("session save failure exposed cookie: %s", stderr)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var event map[string]any
+		if json.Unmarshal([]byte(line), &event) == nil && event["event_name"] == "command_failed" {
+			if event["error_code"] != "STORE_WRITE_FAILED" || event["correlation_id"] == "" || event["operation"] != "login" {
+				t.Fatalf("session save failure lacks safe structured fields: %#v", event)
+			}
+			return
+		}
+	}
+	t.Fatalf("session save failure event missing: %s", stderr)
 }
 
 func TestLoginRejectsEmptyStdin(t *testing.T) {

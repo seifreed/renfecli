@@ -96,6 +96,8 @@ func commandErrorCode(err error) string {
 		return "INVALID_FLAGS"
 	case errors.Is(err, errAuthenticationRequired):
 		return "AUTH_REQUIRED"
+	case errors.Is(err, errStoreWriteFailed):
+		return "STORE_WRITE_FAILED"
 	case errors.Is(err, client.ErrSessionExpired):
 		return "SESSION_EXPIRED"
 	case errors.Is(err, context.DeadlineExceeded):

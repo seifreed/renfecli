@@ -58,7 +58,7 @@ func loadStations(cl *client.Client, force bool, correlationIDs ...string) ([]cl
 		return nil, err
 	}
 	if err := store.Save(stationsCache, stationsFile{FetchedAt: time.Now(), Stations: fresh}); err != nil {
-		stderrEventFor(correlationID, slog.LevelWarn, "station catalogue cache write failed", "component", "store", "error_type", fmt.Sprintf("%T", err))
+		stderrEventFor(correlationID, slog.LevelWarn, "station catalogue cache write failed", "component", "store", "error_type", fmt.Sprintf("%T", err), "error_code", "STORE_WRITE_FAILED")
 	} else {
 		stderrEventFor(correlationID, slog.LevelInfo, "station catalogue refreshed", "component", "store", "station_count", len(fresh), "duration_ms", time.Since(started).Milliseconds())
 	}

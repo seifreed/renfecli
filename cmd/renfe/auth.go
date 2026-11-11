@@ -20,6 +20,7 @@ import (
 const sessionFile = "session.json"
 
 var errAuthenticationRequired = errors.New("authentication required")
+var errStoreWriteFailed = errors.New("store write failed")
 
 // session is what `login` stores and the account commands read back.
 type session struct {
@@ -145,7 +146,7 @@ func cmdLogin(args []string, correlationIDs ...string) error {
 			"then run this again", strings.Join(tried, ", "))
 	}
 	if err := store.Save(sessionFile, session{Cookie: live.Cookie}); err != nil {
-		return fmt.Errorf("could not store the session: %w", err)
+		return fmt.Errorf("%w: could not store the session: %w", errStoreWriteFailed, err)
 	}
 	stderrEventFor(firstCorrelationID(correlationIDs), slog.LevelInfo, "browser session stored", "component", "store", "outcome", "success")
 	if emitted, err := emitStructured(cf, struct {

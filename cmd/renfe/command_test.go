@@ -111,7 +111,7 @@ func TestStationCacheWriteFailureIsWarnedAndDoesNotFailLoad(t *testing.T) {
 		}
 		if event["event_name"] == "station_catalogue_cache_write_failed" {
 			found = true
-			if event["level"] != "WARN" || event["error_type"] == nil || event["correlation_id"] != "correlation-test" {
+			if event["level"] != "WARN" || event["error_type"] == nil || event["error_code"] != "STORE_WRITE_FAILED" || event["correlation_id"] != "correlation-test" {
 				t.Errorf("cache write warning lacks safe diagnostic fields: %#v", event)
 			}
 		}
@@ -325,6 +325,7 @@ func TestCommandErrorCodesClassifyOperationalFailures(t *testing.T) {
 	}{
 		{"invalid flags", errInvalidFlags, "INVALID_FLAGS"},
 		{"authentication", errAuthenticationRequired, "AUTH_REQUIRED"},
+		{"store write", errStoreWriteFailed, "STORE_WRITE_FAILED"},
 		{"session expiry", fmt.Errorf("wrapped: %w", client.ErrSessionExpired), "SESSION_EXPIRED"},
 		{"timeout", context.DeadlineExceeded, "TIMEOUT"},
 		{"cancellation", context.Canceled, "CANCELLED"},
