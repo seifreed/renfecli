@@ -661,3 +661,16 @@ func TestConcurrentStructuredLogsRemainValidRecords(t *testing.T) {
 		seen[id] = true
 	}
 }
+
+func TestLogDestinationFailureDoesNotPanic(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = reader.Close()
+	_ = writer.Close()
+	original := os.Stderr
+	os.Stderr = writer
+	t.Cleanup(func() { os.Stderr = original })
+	stderrEvent(slog.LevelError, "diagnostic destination unavailable", "component", "test")
+}
