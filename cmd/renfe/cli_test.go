@@ -783,6 +783,30 @@ func TestConcurrentStructuredLogsRemainValidRecords(t *testing.T) {
 	}
 }
 
+func BenchmarkStructuredLogging(b *testing.B) {
+	destination, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		b.Fatal(err)
+	}
+	originalStderr := os.Stderr
+	os.Stderr = destination
+	b.Cleanup(func() {
+		os.Stderr = originalStderr
+		_ = destination.Close()
+	})
+	for _, format := range []string{"text", "json"} {
+		b.Run(format, func(b *testing.B) {
+			b.Setenv("RENFE_LOG_FORMAT", format)
+			b.Setenv("RENFE_LOG_LEVEL", "info")
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				stderrEvent(slog.LevelInfo, "benchmark event", "component", "benchmark", "duration_ms", 3)
+			}
+		})
+	}
+}
+
 func TestLogDestinationFailureDoesNotPanic(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {
