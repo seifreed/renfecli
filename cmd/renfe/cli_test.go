@@ -619,6 +619,18 @@ func TestLogLevelFiltersEvents(t *testing.T) {
 	}
 }
 
+func TestInvalidLoggingConfigurationUsesDefaultsAndWarns(t *testing.T) {
+	stderr := captureStderr(t, func() {
+		log := newLogger("invalid\nlevel", "xml")
+		log.Info("default level active")
+	})
+	if !strings.Contains(stderr, "invalid logging configuration; using defaults") ||
+		!strings.Contains(stderr, "RENFE_LOG_LEVEL,RENFE_LOG_FORMAT") ||
+		!strings.Contains(stderr, "default level active") || strings.Contains(stderr, "invalid\nlevel") {
+		t.Fatalf("invalid logging configuration was not safely reported: %q", stderr)
+	}
+}
+
 func TestTraceAndCriticalLevelsAreConfigurable(t *testing.T) {
 	t.Setenv("RENFE_LOG_FORMAT", "json")
 	t.Setenv("RENFE_LOG_LEVEL", "trace")

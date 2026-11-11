@@ -111,6 +111,7 @@ func logger() *slog.Logger {
 
 func newLogger(levelName, format string) *slog.Logger {
 	level := new(slog.LevelVar)
+	invalid := make([]string, 0, 2)
 	switch levelName {
 	case "trace":
 		level.Set(traceLevel)
@@ -124,13 +125,24 @@ func newLogger(levelName, format string) *slog.Logger {
 		level.Set(criticalLevel)
 	default:
 		level.Set(slog.LevelInfo)
+		if levelName != "" {
+			invalid = append(invalid, "RENFE_LOG_LEVEL")
+		}
 	}
 	opts := &slog.HandlerOptions{Level: level, ReplaceAttr: normalizeLogAttr}
 	handler := slog.Handler(slog.NewTextHandler(currentStderr{}, opts))
-	if format == "json" {
+	switch format {
+	case "json":
 		handler = slog.NewJSONHandler(currentStderr{}, opts)
+	case "", "text":
+	default:
+		invalid = append(invalid, "RENFE_LOG_FORMAT")
 	}
-	return slog.New(handler.WithAttrs([]slog.Attr{slog.String("service", "renfecli")}))
+	logger := slog.New(handler.WithAttrs([]slog.Attr{slog.String("service", "renfecli")}))
+	if len(invalid) > 0 {
+		logger.Warn("invalid logging configuration; using defaults", "event_name", "logging_configuration_fallback", "component", "config", "invalid_settings", strings.Join(invalid, ","))
+	}
+	return logger
 }
 
 func normalizeLogAttr(_ []string, attr slog.Attr) slog.Attr {
