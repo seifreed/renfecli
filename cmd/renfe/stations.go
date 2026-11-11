@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ type stationsFile struct {
 // and from renfe.com otherwise. A failed refresh falls back to a stale cache:
 // an offline moment should not stop you resolving "madrid".
 func loadStations(cl *client.Client, force bool) ([]client.Station, error) {
+	started := time.Now()
 	var cached stationsFile
 	haveCache := store.Load(stationsCache, &cached) == nil && len(cached.Stations) > 0
 	// A timestamp in the future — a clock that was wrong when the file was
@@ -34,19 +36,25 @@ func loadStations(cl *client.Client, force bool) ([]client.Station, error) {
 	// otherwise read as "fresh" forever.
 	age := time.Since(cached.FetchedAt)
 	if haveCache && !force && age >= 0 && age < stationsMaxAge {
+		stderrEvent(slog.LevelDebug, "station catalogue cache hit", "component", "store", "station_count", len(cached.Stations), "age_ms", age.Milliseconds())
 		return cached.Stations, nil
+	}
+	if force {
+		stderrEvent(slog.LevelDebug, "station catalogue refresh forced", "component", "store")
 	}
 	fresh, err := cl.Stations()
 	if err != nil {
 		if haveCache {
-			stderrWarnf("station catalogue refresh failed (%v) — using the cached copy from %s",
-				err, cached.FetchedAt.Format(time.DateOnly))
+			stderrEvent(slog.LevelWarn, "station catalogue refresh failed; using stale cache", "component", "store", "station_count", len(cached.Stations), "age_ms", age.Milliseconds(), "error_type", fmt.Sprintf("%T", err))
 			return cached.Stations, nil
 		}
+		stderrEvent(slog.LevelError, "station catalogue unavailable", "component", "store", "outcome", "error", "duration_ms", time.Since(started).Milliseconds())
 		return nil, err
 	}
 	if err := store.Save(stationsCache, stationsFile{FetchedAt: time.Now(), Stations: fresh}); err != nil {
-		stderrWarnf("could not cache the station catalogue: %v", err)
+		stderrEvent(slog.LevelWarn, "station catalogue cache write failed", "component", "store", "error_type", fmt.Sprintf("%T", err))
+	} else {
+		stderrEvent(slog.LevelInfo, "station catalogue refreshed", "component", "store", "station_count", len(fresh), "duration_ms", time.Since(started).Milliseconds())
 	}
 	return fresh, nil
 }

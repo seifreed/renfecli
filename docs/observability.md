@@ -12,6 +12,8 @@ La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. Los e
 
 El límite de despacho registra `command started` y un evento de finalización o fallo con el nombre del comando, resultado y `duration_ms`. Solo registra el nombre de operación; nunca argumentos, que pueden contener información de viaje o cuenta. Los comandos de ayuda/versión también quedan cubiertos.
 
+Las operaciones semánticas de almacenamiento registran el guardado de una sesión sin identidad ni cookie, y la caché de estaciones registra hit/refresco/fallback con conteo, antigüedad y duración. No se instrumenta la biblioteca `store` genérica para evitar estado global y mantenerla libre de dependencia del proceso.
+
 El cliente no depende del logger: `LogEvent` es opcional y el proceso lo conecta a `slog`; `Logf` sigue disponible como fallback para embedders existentes. Cada intercambio HTTP emite en DEBUG método, ruta sin query, estado/resultado y duración; los errores de transporte/lectura registran solo su tipo. Los reintentos son WARN con `status`, `operation`, `attempt`, `max_attempts` y `retry_after_ms`; el fallback TLS es WARN con tipo de error, sin volcar el mensaje del transporte. Errores HTTP exponen el estado y mantienen el cuerpo solo en el objeto para diagnóstico local; `Error()` no vuelca datos remotos potencialmente privados.
 
 No registrar cookies, cabeceras, payloads, itinerarios ni cuerpos HTTP. Mensajes que contengan datos externos deben pasar por `safeText`; campos de una línea por `safeField`. No incluir secretos como atributos estructurados. Los errores operativos se presentan una vez en el límite CLI; fallos recuperables se emiten donde se decide la recuperación.

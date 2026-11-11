@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/seifreed/renfecli/internal/client"
+	"github.com/seifreed/renfecli/internal/config"
 )
 
 // These exercise a command end to end — flag parsing, the station lookup, the
@@ -35,6 +36,21 @@ func TestSearchCommandEndToEnd(t *testing.T) {
 	}
 	if !strings.Contains(out, "cheapest nearby:") {
 		t.Errorf("the price-calendar line should ride along with a search:\n%s", out)
+	}
+}
+
+func TestStationCacheHitIsObservableWithoutStationData(t *testing.T) {
+	withRenfe(t, replaying(t, "trainslist.dwr"))
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	stderr := captureStderr(t, func() {
+		if _, err := loadStations(newClient(config.Config{}), false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(stderr, `"msg":"station catalogue cache hit"`) ||
+		!strings.Contains(stderr, `"station_count":2`) || strings.Contains(stderr, "BARCELONA") {
+		t.Fatalf("unexpected station cache event: %s", stderr)
 	}
 }
 

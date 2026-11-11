@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
@@ -140,6 +141,7 @@ func cmdLogin(args []string) error {
 	if err := store.Save(sessionFile, session{Cookie: live.Cookie}); err != nil {
 		return fmt.Errorf("could not store the session: %w", err)
 	}
+	stderrEvent(slog.LevelInfo, "browser session stored", "component", "store", "outcome", "success")
 	if emitted, err := emitStructured(cf, struct {
 		Name string `json:"name"`
 	}{name}); emitted {
