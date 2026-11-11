@@ -120,7 +120,7 @@ func newLogger(levelName, format string) *slog.Logger {
 	default:
 		level.Set(slog.LevelInfo)
 	}
-	opts := &slog.HandlerOptions{Level: level, ReplaceAttr: logLevelName}
+	opts := &slog.HandlerOptions{Level: level, ReplaceAttr: normalizeLogAttr}
 	handler := slog.Handler(slog.NewTextHandler(currentStderr{}, opts))
 	if format == "json" {
 		handler = slog.NewJSONHandler(currentStderr{}, opts)
@@ -128,22 +128,22 @@ func newLogger(levelName, format string) *slog.Logger {
 	return slog.New(handler.WithAttrs([]slog.Attr{slog.String("service", "renfecli")}))
 }
 
-func logLevelName(_ []string, attr slog.Attr) slog.Attr {
-	if attr.Key != slog.LevelKey {
-		return attr
+func normalizeLogAttr(_ []string, attr slog.Attr) slog.Attr {
+	if attr.Key == slog.TimeKey {
+		return slog.Time(slog.TimeKey, attr.Value.Time().UTC())
 	}
-	level, ok := attr.Value.Any().(slog.Level)
-	if !ok {
-		return attr
+	if attr.Key == slog.LevelKey {
+		level, ok := attr.Value.Any().(slog.Level)
+		if ok {
+			switch level {
+			case traceLevel:
+				return slog.String(slog.LevelKey, "TRACE")
+			case criticalLevel:
+				return slog.String(slog.LevelKey, "CRITICAL")
+			}
+		}
 	}
-	switch level {
-	case traceLevel:
-		return slog.String(slog.LevelKey, "TRACE")
-	case criticalLevel:
-		return slog.String(slog.LevelKey, "CRITICAL")
-	default:
-		return attr
-	}
+	return attr
 }
 
 // common flags shared by every subcommand.

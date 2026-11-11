@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/seifreed/renfecli/internal/client"
 )
@@ -630,6 +631,28 @@ func TestTraceAndCriticalLevelsAreConfigurable(t *testing.T) {
 	})
 	if strings.Contains(critical, "recoverable failure") || !strings.Contains(critical, `"level":"CRITICAL"`) {
 		t.Fatalf("critical threshold or level name is wrong: %s", critical)
+	}
+}
+
+func TestJSONLogTimestampIsUTC(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	stderr := captureStderr(t, func() { stderrEvent(slog.LevelInfo, "clock check") })
+	var event map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stderr)), &event); err != nil {
+		t.Fatalf("invalid JSON log record: %v\n%s", err, stderr)
+	}
+	timestamp, ok := event["time"].(string)
+	if !ok || !strings.HasSuffix(timestamp, "Z") {
+		t.Fatalf("timestamp is not serialized in UTC: %#v", event["time"])
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, timestamp)
+	if err != nil {
+		t.Fatalf("timestamp is not RFC3339: %v", err)
+	}
+	_, offset := parsed.Zone()
+	if offset != 0 {
+		t.Errorf("timestamp UTC offset = %d, want 0", offset)
 	}
 }
 

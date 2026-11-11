@@ -8,7 +8,7 @@ Puntuación inicial (0–10): arquitectura 4, cobertura 3, utilidad 4, estructur
 
 ## Implementación
 
-La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. El handler se cachea según formato/nivel y serializa escrituras concurrentes; su writer sigue el `os.Stderr` actual para permitir captura/redirección del proceso. Los eventos tienen `service=renfecli`, `component`, `event_name` normalizado, timestamp y nivel; el texto legible es el formato por defecto y JSON se activa con `RENFE_LOG_FORMAT=json`. `RENFE_LOG_LEVEL` admite `trace`, `debug`, `info` (predeterminado), `warn`, `error` y `critical` (`fatal` es alias); valores desconocidos usan `info`. TRACE y CRITICAL usan los niveles extendidos de `slog` y conservan sus nombres al serializar.
+La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. El handler se cachea según formato/nivel y serializa escrituras concurrentes; su writer sigue el `os.Stderr` actual para permitir captura/redirección del proceso. Los eventos tienen `service=renfecli`, `component`, `event_name` normalizado, timestamp RFC3339 en UTC y nivel; el texto legible es el formato por defecto y JSON se activa con `RENFE_LOG_FORMAT=json`. `RENFE_LOG_LEVEL` admite `trace`, `debug`, `info` (predeterminado), `warn`, `error` y `critical` (`fatal` es alias); valores desconocidos usan `info`. TRACE y CRITICAL usan los niveles extendidos de `slog` y conservan sus nombres al serializar.
 
 El límite de despacho registra `command started` y un evento de finalización o fallo con el nombre del comando, resultado y `duration_ms`. Solo registra el nombre de operación; nunca argumentos, que pueden contener información de viaje o cuenta. Los comandos de ayuda/versión también quedan cubiertos.
 
@@ -24,7 +24,7 @@ Los errores agregados al explorar almacenes de cookies de navegador exponen cant
 
 Los errores de excepción DWR y respuestas con formato inesperado tampoco incluyen fragmentos de respuesta en `Error()`. La clasificación de sesión expirada usa un indicador interno de U014, de modo que el flujo de recuperación no depende de imprimir el cuerpo del servidor.
 
-La prueba concurrente ejecuta 48 emisores en paralelo, valida cada línea JSON y unicidad de IDs; se repite 10 veces con `go test -race`. Las pruebas confirman selección y nombre de niveles, redacción de claves sensibles, eliminación de caracteres de control y que un fallo de escritura del catálogo se registra con nivel, tipo y correlación sin descartar datos frescos. La prueba de flujo completo ejecuta `search` contra Renfe simulado y verifica que los eventos de inicio/fin, caché y HTTP compartan el mismo `correlation_id`. Las salidas JSON deben conservar un evento por línea incluso ante saltos de línea remotos.
+La prueba concurrente ejecuta 48 emisores en paralelo, valida cada línea JSON y unicidad de IDs; se repite 10 veces con `go test -race`. Las pruebas confirman timestamp UTC, selección y nombre de niveles, redacción de claves sensibles, eliminación de caracteres de control y que un fallo de escritura del catálogo se registra con nivel, tipo y correlación sin descartar datos frescos. La prueba de flujo completo ejecuta `search` contra Renfe simulado y verifica que los eventos de inicio/fin, caché y HTTP compartan el mismo `correlation_id`. Las salidas JSON deben conservar un evento por línea incluso ante saltos de línea remotos.
 
 Ejemplo JSON:
 
