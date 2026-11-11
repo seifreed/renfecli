@@ -595,7 +595,7 @@ func TestRunEmitsStructuredLifecycleWithoutArguments(t *testing.T) {
 			t.Fatalf("run returned %d", code)
 		}
 	})
-	if !strings.Contains(stderr, `"operation":"version"`) || !strings.Contains(stderr, `"duration_ms":`) || strings.Contains(stderr, "sensitive-argument") {
+	if !strings.Contains(stderr, `"operation":"version"`) || !strings.Contains(stderr, `"event_name":"command_started"`) || !strings.Contains(stderr, `"component":"cli"`) || !strings.Contains(stderr, `"duration_ms":`) || strings.Contains(stderr, "sensitive-argument") {
 		t.Fatalf("unexpected lifecycle logs: %s", stderr)
 	}
 }

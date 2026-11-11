@@ -36,7 +36,7 @@ func run(args []string) int {
 	}
 	started := time.Now()
 	operation := safeField(args[0])
-	logger().Info("command started", "operation", operation)
+	logger().Info("command started", "event_name", "command_started", "component", "cli", "operation", operation)
 	var err error
 	switch args[0] {
 	case "search":
@@ -65,11 +65,11 @@ func run(args []string) int {
 		return 2
 	}
 	if err != nil {
-		logger().Error("command failed", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds())
+		logger().Error("command failed", "event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds())
 		fmt.Fprintln(os.Stderr, "error:", safeText(explain(err)))
 		return 1
 	}
-	logger().Info("command completed", "operation", operation, "outcome", "success", "duration_ms", time.Since(started).Milliseconds())
+	logger().Info("command completed", "event_name", "command_completed", "component", "cli", "operation", operation, "outcome", "success", "duration_ms", time.Since(started).Milliseconds())
 	return 0
 }
 

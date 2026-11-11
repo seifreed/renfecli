@@ -8,7 +8,7 @@ Puntuación inicial (0–10): arquitectura 4, cobertura 3, utilidad 4, estructur
 
 ## Implementación
 
-La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. Los eventos tienen `service=renfecli`; el texto legible es el formato por defecto y JSON se activa con `RENFE_LOG_FORMAT=json`. `RENFE_LOG_LEVEL` admite `debug`, `info` (predeterminado), `warn` y `error`; valores desconocidos usan `info`. TRACE y FATAL no forman parte de los niveles estándar de `slog` y no se necesitan para estos flujos.
+La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. Los eventos tienen `service=renfecli`, `component`, `event_name` normalizado, timestamp y nivel; el texto legible es el formato por defecto y JSON se activa con `RENFE_LOG_FORMAT=json`. `RENFE_LOG_LEVEL` admite `debug`, `info` (predeterminado), `warn` y `error`; valores desconocidos usan `info`. TRACE y FATAL no forman parte de los niveles estándar de `slog` y no se necesitan para estos flujos.
 
 El límite de despacho registra `command started` y un evento de finalización o fallo con el nombre del comando, resultado y `duration_ms`. Solo registra el nombre de operación; nunca argumentos, que pueden contener información de viaje o cuenta. Los comandos de ayuda/versión también quedan cubiertos.
 
@@ -25,7 +25,7 @@ La prueba concurrente ejecuta 48 emisores en paralelo, valida cada línea JSON y
 Ejemplo JSON:
 
 ```json
-{"time":"2026-11-11T12:00:00Z","level":"WARN","msg":"HTTP request throttled; retrying","service":"renfecli","status":429,"operation":"search","attempt":1,"max_attempts":3,"retry_after_ms":500}
+{"time":"2026-11-11T12:00:00Z","level":"WARN","msg":"HTTP request throttled; retrying","service":"renfecli","event_name":"http_request_throttled_retrying","component":"client","status":429,"operation":"search","attempt":1,"max_attempts":3,"retry_after_ms":500}
 ```
 
 Para diagnosticar: enviar stderr a la herramienta del sistema; usar `RENFE_LOG_FORMAT=json` para ingestión y `RENFE_LOG_LEVEL=debug` cuando existan eventos de diagnóstico de ese nivel. No hay rotación de archivos ni destino remoto: los opera el entorno que lanza el proceso.

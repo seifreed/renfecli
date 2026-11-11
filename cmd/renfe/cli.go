@@ -9,21 +9,40 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/seifreed/renfecli/internal/client"
 	"github.com/seifreed/renfecli/internal/config"
 )
 
 func stderrEvent(level slog.Level, message string, args ...any) {
-	clean := make([]any, len(args))
-	for i, arg := range args {
+	clean := make([]any, 0, len(args)+2)
+	clean = append(clean, "event_name", normalizedEventName(message))
+	for _, arg := range args {
 		if s, ok := arg.(string); ok {
-			clean[i] = safeText(s)
+			clean = append(clean, safeText(s))
 		} else {
-			clean[i] = arg
+			clean = append(clean, arg)
 		}
 	}
 	logger().Log(context.Background(), level, safeText(message), clean...)
+}
+
+func normalizedEventName(message string) string {
+	var b strings.Builder
+	separator := false
+	for _, r := range strings.ToLower(message) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if separator && b.Len() > 0 {
+				b.WriteByte('_')
+			}
+			b.WriteRune(r)
+			separator = false
+		} else {
+			separator = true
+		}
+	}
+	return b.String()
 }
 
 func logger() *slog.Logger {

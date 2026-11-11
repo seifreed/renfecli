@@ -207,19 +207,19 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	started := time.Now()
 	c.warnOnce.Do(func() {
 		if c.transportErr != nil {
-			c.logEvent(slog.LevelWarn, "TLS transport fallback", "error_type", fmt.Sprintf("%T", c.transportErr))
+			c.logEvent(slog.LevelWarn, "TLS transport fallback", "component", "client", "error_type", fmt.Sprintf("%T", c.transportErr))
 		}
 	})
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		c.logEvent(slog.LevelDebug, "HTTP request completed", "method", req.Method, "operation", req.URL.Path,
+		c.logEvent(slog.LevelDebug, "HTTP request completed", "component", "client", "method", req.Method, "operation", req.URL.Path,
 			"outcome", "transport_error", "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds())
 		return nil, err
 	}
 	defer resp.Body.Close()
 	data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.logEvent(slog.LevelDebug, "HTTP request completed", "method", req.Method, "operation", req.URL.Path,
+		c.logEvent(slog.LevelDebug, "HTTP request completed", "component", "client", "method", req.Method, "operation", req.URL.Path,
 			"status", resp.StatusCode, "outcome", "http_error", "duration_ms", time.Since(started).Milliseconds())
 		// On a non-2xx, surface whatever body we managed to read as error context
 		// (best effort) — the status is the actionable signal, not the read error.
@@ -232,12 +232,12 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	// A 2xx whose body read failed mid-stream must not pass as success: the DWR
 	// payload would parse as "truncated" at best and silently short at worst.
 	if readErr != nil {
-		c.logEvent(slog.LevelDebug, "HTTP request completed", "method", req.Method, "operation", req.URL.Path,
+		c.logEvent(slog.LevelDebug, "HTTP request completed", "component", "client", "method", req.Method, "operation", req.URL.Path,
 			"status", resp.StatusCode, "outcome", "read_error", "error_type", fmt.Sprintf("%T", readErr),
 			"duration_ms", time.Since(started).Milliseconds())
 		return nil, fmt.Errorf("read response body from %s: %w", req.URL, readErr)
 	}
-	c.logEvent(slog.LevelDebug, "HTTP request completed", "method", req.Method, "operation", req.URL.Path,
+	c.logEvent(slog.LevelDebug, "HTTP request completed", "component", "client", "method", req.Method, "operation", req.URL.Path,
 		"status", resp.StatusCode, "outcome", "success", "duration_ms", time.Since(started).Milliseconds())
 	return data, nil
 }
@@ -254,7 +254,7 @@ func (c *Client) doRetry(what string, fn func() ([]byte, error)) ([]byte, error)
 		}
 		wait := retryWait(err, backoff)
 		status, _ := HTTPStatus(err)
-		c.logEvent(slog.LevelWarn, "HTTP request throttled; retrying", "status", status, "operation", what,
+		c.logEvent(slog.LevelWarn, "HTTP request throttled; retrying", "component", "client", "status", status, "operation", what,
 			"attempt", attempt+1, "max_attempts", maxRetries, "retry_after_ms", wait.Milliseconds())
 		time.Sleep(wait)
 		backoff *= 2
