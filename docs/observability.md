@@ -30,4 +30,4 @@ Además del ciclo de vida de comandos, la cobertura incluye fallos de recuperaci
 
 ## Revisión intermedia
 
-Tras añadir eventos de ciclo de vida, reintentos estructurados y niveles WARN para condiciones recuperables: arquitectura 6, cobertura 5, utilidad 6, estructura 7, correlación 2, seguridad 7, rendimiento 5, configuración 6, errores 6, pruebas 7. Media **5,7/10**. Es una valoración intermedia, no una puntuación final; aún faltan pruebas de seguridad/inyección y cobertura de operaciones HTTP fallidas/correctas.
+Tras añadir eventos de ciclo de vida, eventos HTTP DEBUG, reintentos estructurados, niveles WARN y pruebas de serialización/redacción: arquitectura 6, cobertura 6, utilidad 7, estructura 8, correlación 2, seguridad 8, rendimiento 6, configuración 6, errores 7, pruebas 8. Media **6,4/10**. Es una valoración intermedia, no una puntuación final; falta correlación, instrumentación de operaciones de almacenamiento, políticas documentadas completas y más pruebas de fallos y privacidad.

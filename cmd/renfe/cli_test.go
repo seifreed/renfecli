@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -606,5 +607,23 @@ func TestLogLevelFiltersEvents(t *testing.T) {
 	})
 	if strings.Contains(stderr, "routine event") || !strings.Contains(stderr, "recoverable issue") {
 		t.Fatalf("WARN threshold did not filter events: %s", stderr)
+	}
+}
+
+func TestJSONLogEscapesUntrustedTextAsOneRecord(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	input := "remote\nforged event\x1b"
+	stderr := captureStderr(t, func() { stderrEvent(slog.LevelWarn, "remote warning", "detail", input) })
+	lines := strings.Split(strings.TrimSpace(stderr), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("untrusted text injected additional log records: %q", stderr)
+	}
+	var record map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+		t.Fatalf("invalid JSON log record: %v", err)
+	}
+	if record["detail"] != "remote\nforged event" {
+		t.Fatalf("control characters were not stripped from attribute: %#v", record["detail"])
 	}
 }
