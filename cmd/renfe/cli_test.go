@@ -584,3 +584,15 @@ func TestAccountCommandsFailClosedOnAForeignHost(t *testing.T) {
 		t.Errorf("unclear message: %v", err)
 	}
 }
+
+func TestRunEmitsStructuredLifecycleWithoutArguments(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	stderr := captureStderr(t, func() {
+		if code := run([]string{"version", "sensitive-argument"}); code != 0 {
+			t.Fatalf("run returned %d", code)
+		}
+	})
+	if !strings.Contains(stderr, `"operation":"version"`) || !strings.Contains(stderr, `"duration_ms":`) || strings.Contains(stderr, "sensitive-argument") {
+		t.Fatalf("unexpected lifecycle logs: %s", stderr)
+	}
+}
