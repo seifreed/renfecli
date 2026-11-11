@@ -19,14 +19,35 @@ import (
 func stderrEvent(level slog.Level, message string, args ...any) {
 	clean := make([]any, 0, len(args)+2)
 	clean = append(clean, "event_name", normalizedEventName(message))
-	for _, arg := range args {
-		if s, ok := arg.(string); ok {
+	for i := 0; i < len(args); i++ {
+		key, ok := args[i].(string)
+		if ok && i+1 < len(args) {
+			key = safeField(key)
+			value := args[i+1]
+			if sensitiveLogKey(key) {
+				value = "[REDACTED]"
+			} else if s, ok := value.(string); ok {
+				value = safeText(s)
+			}
+			clean = append(clean, key, value)
+			i++
+		} else if s, ok := args[i].(string); ok {
 			clean = append(clean, safeText(s))
 		} else {
-			clean = append(clean, arg)
+			clean = append(clean, args[i])
 		}
 	}
 	logger().Log(context.Background(), level, safeText(message), clean...)
+}
+
+func sensitiveLogKey(key string) bool {
+	normalized := strings.NewReplacer("_", "", "-", "", ".", "").Replace(strings.ToLower(key))
+	for _, marker := range []string{"password", "passwd", "secret", "token", "cookie", "authorization", "authentication", "apikey", "privatekey", "credential"} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func correlationAttrs(id string) []any {

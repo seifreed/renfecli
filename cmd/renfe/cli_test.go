@@ -629,6 +629,36 @@ func TestJSONLogEscapesUntrustedTextAsOneRecord(t *testing.T) {
 	}
 }
 
+func TestJSONLogRedactsSensitiveAttributeKeys(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	stderr := captureStderr(t, func() {
+		stderrEvent(slog.LevelWarn, "remote warning",
+			"password", "pw-value",
+			"access_token", "token-value",
+			"session-cookie", "cookie-value",
+			"authorizationHeader", "auth-value",
+			"api_key", "key-value",
+			"detail", "retrying",
+		)
+	})
+	var record map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stderr)), &record); err != nil {
+		t.Fatalf("invalid JSON log record: %v\n%s", err, stderr)
+	}
+	for _, key := range []string{"password", "access_token", "session-cookie", "authorizationHeader", "api_key"} {
+		if record[key] != "[REDACTED]" {
+			t.Errorf("%s = %#v, want redacted", key, record[key])
+		}
+	}
+	if strings.Contains(stderr, "pw-value") || strings.Contains(stderr, "token-value") || strings.Contains(stderr, "cookie-value") || strings.Contains(stderr, "auth-value") || strings.Contains(stderr, "key-value") {
+		t.Fatalf("sensitive log value leaked: %s", stderr)
+	}
+	if record["detail"] != "retrying" {
+		t.Errorf("non-sensitive attribute changed: %#v", record["detail"])
+	}
+}
+
 func TestConcurrentStructuredLogsRemainValidRecords(t *testing.T) {
 	t.Setenv("RENFE_LOG_FORMAT", "json")
 	t.Setenv("RENFE_LOG_LEVEL", "debug")
