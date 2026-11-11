@@ -117,6 +117,8 @@ func newLogger(levelName, format string) *slog.Logger {
 		level.Set(traceLevel)
 	case "debug":
 		level.Set(slog.LevelDebug)
+	case "info":
+		level.Set(slog.LevelInfo)
 	case "warn", "warning":
 		level.Set(slog.LevelWarn)
 	case "error":
