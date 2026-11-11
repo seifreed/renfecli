@@ -15,7 +15,9 @@ func cmdCalendar(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("calendar")
 	sf := addSearchFlags(fs)
 	onlyBest := fs.Bool("cheapest", false, "show only the cheapest day")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	_, _, res, err := runSearch("calendar", sf, fs.Args(), correlationIDs...)
 	if err != nil {

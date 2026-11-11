@@ -69,7 +69,9 @@ func cmdStations(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("stations")
 	update := fs.Bool("update", false, "re-download the catalogue, ignoring the cache")
 	limit := fs.Int("limit", 20, "cap the number of matches shown (0 = no cap)")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	if err := nonNegative("--limit", *limit); err != nil {
 		return err

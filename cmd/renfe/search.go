@@ -146,7 +146,9 @@ func cmdSearch(args []string, correlationIDs ...string) error {
 	available := fs.Bool("available", false, "hide sold-out and unpriced journeys")
 	fares := fs.Bool("fares", false, "list every fare bucket, not just the cheapest")
 	limit := fs.Int("limit", 0, "cap the number of journeys shown")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	if err := nonNegative("--limit", *limit); err != nil {
 		return err

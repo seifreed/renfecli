@@ -50,7 +50,9 @@ func newSessionState(name string, left time.Duration) sessionState {
 
 func sessionStatus(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("session status")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	cl, err := authClient(correlationIDs...)
 	if err != nil {
@@ -103,7 +105,9 @@ func sessionKeep(args []string, correlationIDs ...string) error {
 	every := fs.Duration("every", 0, "fixed refresh interval; default is adaptive, just before each lapse")
 	forDur := fs.Duration("for", 0, "stop after this long (default: until interrupted)")
 	quiet := fs.Bool("quiet", false, "only report problems")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	cl, err := authClient(correlationIDs...)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/url"
@@ -164,7 +165,8 @@ func (c *common) structured() bool { return c.toon || c.jsonOut }
 // newCommonFlags builds a flag set carrying the common flags, the starting
 // point for every command that takes them.
 func newCommonFlags(name string) (*flag.FlagSet, *common) {
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	return fs, addCommon(fs)
 }
 
@@ -286,18 +288,28 @@ func firstCorrelationID(ids []string) string {
 // parseFlags parses args into fs, letting flags appear among positionals (see
 // reorderArgs). Centralised so every command parses identically and none forgets
 // the reorder step — omitting it silently drops flags placed after positionals.
-func parseFlags(fs *flag.FlagSet, args []string) {
+func parseFlags(fs *flag.FlagSet, args []string) error {
 	reordered, dangling := reorderArgs(fs, args)
+	var err error
 	if dangling != "" {
 		// The stdlib reports a missing value only when the flag is the last
 		// token, which the reorder guarantees it never is — the "--" terminator
 		// would be parsed as the value instead, and the user would be told
 		// `bad date "--"` about a "--" they never typed. Hand the flag over on
 		// its own so the stdlib produces its own message and exit code.
-		_ = fs.Parse([]string{dangling})
-		return
+		err = fs.Parse([]string{dangling})
+	} else {
+		err = fs.Parse(reordered)
 	}
-	_ = fs.Parse(reordered)
+	if err == nil {
+		return nil
+	}
+	if err == flag.ErrHelp {
+		fs.SetOutput(os.Stderr)
+		fs.Usage()
+		return flag.ErrHelp
+	}
+	return fmt.Errorf("invalid flags: %w", err)
 }
 
 // reorderArgs lets flags appear anywhere among positional args. The stdlib flag

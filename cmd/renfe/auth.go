@@ -93,7 +93,9 @@ func cmdLogin(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("login")
 	fromBrowser := fs.String("from-browser", "", "name one browser's cookie store: chrome|chromium|firefox|safari|edge|brave (omit the flag to search every installed browser)")
 	fromStdin := fs.Bool("stdin", false, "read a raw Cookie header from stdin instead")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	var candidates []client.BrowserSession
 	switch {
@@ -174,7 +176,9 @@ func firstLiveSession(cl *client.Client, candidates []client.BrowserSession) (cl
 
 func cmdWhoami(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("whoami")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	cl, err := authClient(correlationIDs...)
 	if err != nil {
@@ -209,7 +213,9 @@ func cmdWhoami(args []string, correlationIDs ...string) error {
 
 func cmdTrips(args []string, correlationIDs ...string) error {
 	fs, cf := newCommonFlags("trips")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	cl, err := authClient(correlationIDs...)
 	if err != nil {

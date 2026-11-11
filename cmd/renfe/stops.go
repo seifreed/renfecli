@@ -16,7 +16,9 @@ func cmdStops(args []string, correlationIDs ...string) error {
 	sf := addSearchFlags(fs)
 	train := fs.String("train", "", "train number to detail (default: the first journey found)")
 	at := fs.String("at", "", "pick the journey departing at this time (HH:MM)")
-	parseFlags(fs, args)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
 
 	cl, _, res, err := runSearch("stops", sf, fs.Args(), correlationIDs...)
 	if err != nil {

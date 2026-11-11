@@ -45,7 +45,9 @@ func TestReorderArgs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fs := newFS()
-			parseFlags(fs, tc.args)
+			if err := parseFlags(fs, tc.args); err != nil {
+				t.Fatalf("parseFlags: %v", err)
+			}
 			if got := fs.Lookup("date").Value.String(); got != tc.date {
 				t.Errorf("--date = %q, want %q", got, tc.date)
 			}
@@ -481,7 +483,9 @@ func TestParseFlagsReportsAFlagLeftWithoutAValue(t *testing.T) {
 	var errOut strings.Builder
 	fs.SetOutput(&errOut)
 
-	parseFlags(fs, []string{"madrid", "barcelona", "--date"})
+	if err := parseFlags(fs, []string{"madrid", "barcelona", "--date"}); err == nil {
+		t.Fatal("a missing flag value should be returned to the caller")
+	}
 
 	if got := fs.Lookup("date").Value.String(); got != "" {
 		t.Errorf("--date swallowed %q as its value", got)
@@ -492,7 +496,9 @@ func TestParseFlagsReportsAFlagLeftWithoutAValue(t *testing.T) {
 	// A bool flag at the end is complete on its own and must still parse.
 	fs2 := flag.NewFlagSet("t", flag.ContinueOnError)
 	fs2.Bool("json", false, "")
-	parseFlags(fs2, []string{"madrid", "--json"})
+	if err := parseFlags(fs2, []string{"madrid", "--json"}); err != nil {
+		t.Fatalf("valid trailing bool flag: %v", err)
+	}
 	if fs2.Lookup("json").Value.String() != "true" {
 		t.Error("a trailing bool flag was dropped")
 	}

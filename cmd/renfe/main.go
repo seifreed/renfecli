@@ -9,6 +9,8 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -65,6 +67,10 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", safeField(args[0]))
 		usage()
 		return 2
+	}
+	if errors.Is(err, flag.ErrHelp) {
+		logger().Info("command completed", append([]any{"event_name", "command_completed", "component", "cli", "operation", operation, "outcome", "success", "duration_ms", time.Since(started).Milliseconds()}, correlationAttrs(correlationID)...)...)
+		return 0
 	}
 	if err != nil {
 		attrs := []any{"event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds()}

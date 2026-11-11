@@ -265,6 +265,49 @@ func TestRunHTTPFailureLogsStatusAndCorrelationWithoutRemoteBody(t *testing.T) {
 	}
 }
 
+func TestRunInvalidFlagEmitsCorrelatedFailure(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	var code int
+	stderr := captureStderr(t, func() { code = run([]string{"search", "--unknown"}) })
+	if code != 1 {
+		t.Fatalf("run returned %d, want invalid command failure", code)
+	}
+	var startedID string
+	var failed map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		switch event["event_name"] {
+		case "command_started":
+			startedID, _ = event["correlation_id"].(string)
+		case "command_failed":
+			failed = event
+		}
+	}
+	if startedID == "" || failed == nil || failed["correlation_id"] != startedID || failed["error_type"] == nil {
+		t.Fatalf("invalid flag failure lacked correlated diagnostics: %s", stderr)
+	}
+	if !strings.Contains(stderr, "flag provided but not defined") {
+		t.Fatalf("actionable usage error missing: %s", stderr)
+	}
+}
+
+func TestRunCommandHelpCompletesSuccessfully(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	var code int
+	stderr := captureStderr(t, func() { code = run([]string{"search", "--help"}) })
+	if code != 0 || !strings.Contains(stderr, "USAGE") && !strings.Contains(stderr, "Usage of search") {
+		t.Fatalf("command help was not successful or visible: code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, `"event_name":"command_completed"`) || strings.Contains(stderr, `"event_name":"command_failed"`) {
+		t.Fatalf("help did not complete cleanly in logs: %s", stderr)
+	}
+}
+
 // A round trip arrives in one reply; both directions have to survive the CLI.
 func TestSearchCommandRoundTrip(t *testing.T) {
 	withRenfe(t, replaying(t, "roundtrip.dwr"))
