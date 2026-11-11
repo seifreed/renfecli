@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/seifreed/renfecli/internal/client"
@@ -625,5 +626,38 @@ func TestJSONLogEscapesUntrustedTextAsOneRecord(t *testing.T) {
 	}
 	if record["detail"] != "remote\nforged event" {
 		t.Fatalf("control characters were not stripped from attribute: %#v", record["detail"])
+	}
+}
+
+func TestConcurrentStructuredLogsRemainValidRecords(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	const records = 48
+	stderr := captureStderr(t, func() {
+		var wg sync.WaitGroup
+		wg.Add(records)
+		for i := 0; i < records; i++ {
+			go func(id int) {
+				defer wg.Done()
+				stderrEvent(slog.LevelDebug, "concurrent diagnostic", "worker", id)
+			}(i)
+		}
+		wg.Wait()
+	})
+	lines := strings.Split(strings.TrimSpace(stderr), "\n")
+	if len(lines) != records {
+		t.Fatalf("got %d records, want %d", len(lines), records)
+	}
+	seen := map[float64]bool{}
+	for _, line := range lines {
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("concurrent log line is invalid JSON: %v", err)
+		}
+		id, ok := record["worker"].(float64)
+		if !ok || seen[id] {
+			t.Fatalf("missing or duplicated worker field: %#v", record)
+		}
+		seen[id] = true
 	}
 }

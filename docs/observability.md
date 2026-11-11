@@ -20,6 +20,8 @@ El cliente no depende del logger: `LogEvent` es opcional y el proceso lo conecta
 
 No registrar cookies, cabeceras, payloads, itinerarios ni cuerpos HTTP. Mensajes que contengan datos externos deben pasar por `safeText`; campos de una línea por `safeField`. No incluir secretos como atributos estructurados ni interpolar texto de error remoto; registrar `error_type` y estado útil. Los errores operativos se presentan una vez en el límite CLI; fallos recuperables se emiten donde se decide la recuperación.
 
+La prueba concurrente ejecuta 48 emisores en paralelo, valida cada línea JSON y unicidad de IDs; se repite 10 veces con `go test -race`. Las salidas JSON deben conservar un evento por línea incluso ante saltos de línea remotos.
+
 Ejemplo JSON:
 
 ```json
