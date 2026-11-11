@@ -122,7 +122,8 @@ jobs:
           Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
           Remove-Item -Recurse -Force "dist/$name"
           $hash = (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower()
-          Set-Content "dist/renfe_${version}_windows_SHA256SUMS" "$hash  $name.zip"
+          # Write LF without a BOM so the manifest verifies on Unix too.
+          [System.IO.File]::WriteAllText("dist/renfe_${version}_windows_SHA256SUMS", "$hash  $name.zip`n", [System.Text.UTF8Encoding]::new($false))
 
       - name: attach to the draft
         shell: bash
