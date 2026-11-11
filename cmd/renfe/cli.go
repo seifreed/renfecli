@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +17,8 @@ import (
 	"github.com/seifreed/renfecli/internal/client"
 	"github.com/seifreed/renfecli/internal/config"
 )
+
+var errInvalidFlags = errors.New("invalid flags")
 
 const (
 	traceLevel    = slog.LevelDebug - 4
@@ -309,7 +312,7 @@ func parseFlags(fs *flag.FlagSet, args []string) error {
 		fs.Usage()
 		return flag.ErrHelp
 	}
-	return fmt.Errorf("invalid flags: %w", err)
+	return fmt.Errorf("%w: %w", errInvalidFlags, err)
 }
 
 // reorderArgs lets flags appear anywhere among positional args. The stdlib flag

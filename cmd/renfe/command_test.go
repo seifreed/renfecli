@@ -287,11 +287,24 @@ func TestRunInvalidFlagEmitsCorrelatedFailure(t *testing.T) {
 			failed = event
 		}
 	}
-	if startedID == "" || failed == nil || failed["correlation_id"] != startedID || failed["error_type"] == nil {
+	if startedID == "" || failed == nil || failed["correlation_id"] != startedID || failed["error_type"] == nil || failed["error_code"] != "INVALID_FLAGS" {
 		t.Fatalf("invalid flag failure lacked correlated diagnostics: %s", stderr)
 	}
 	if !strings.Contains(stderr, "flag provided but not defined") {
 		t.Fatalf("actionable usage error missing: %s", stderr)
+	}
+}
+
+func TestRunUnknownCommandIsRejectedWithWarning(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	var code int
+	stderr := captureStderr(t, func() { code = run([]string{"not-a-command"}) })
+	if code != 2 {
+		t.Fatalf("run returned %d, want usage error code 2", code)
+	}
+	if !strings.Contains(stderr, `"event_name":"command_rejected"`) || !strings.Contains(stderr, `"error_code":"UNKNOWN_COMMAND"`) {
+		t.Fatalf("unknown command lacked a structured warning: %s", stderr)
 	}
 }
 

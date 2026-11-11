@@ -64,6 +64,7 @@ func run(args []string) int {
 	case "help", "-h", "--help":
 		usage()
 	default:
+		logger().Warn("unknown command", append([]any{"event_name", "command_rejected", "component", "cli", "operation", operation, "error_code", "UNKNOWN_COMMAND"}, correlationAttrs(correlationID)...)...)
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", safeField(args[0]))
 		usage()
 		return 2
@@ -74,6 +75,9 @@ func run(args []string) int {
 	}
 	if err != nil {
 		attrs := []any{"event_name", "command_failed", "component", "cli", "operation", operation, "error_type", fmt.Sprintf("%T", err), "duration_ms", time.Since(started).Milliseconds()}
+		if errors.Is(err, errInvalidFlags) {
+			attrs = append(attrs, "error_code", "INVALID_FLAGS")
+		}
 		if status, ok := client.HTTPStatus(err); ok {
 			attrs = append(attrs, "http_status", status, "error_code", fmt.Sprintf("HTTP_%d", status))
 		}
