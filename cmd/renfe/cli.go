@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,18 @@ import (
 // It is a var so tests can capture what would be logged.
 var stderrLogf = func(format string, args ...any) {
 	logger().Info(safeText(fmt.Sprintf(format, args...)))
+}
+
+func stderrEvent(level slog.Level, message string, args ...any) {
+	clean := make([]any, len(args))
+	for i, arg := range args {
+		if s, ok := arg.(string); ok {
+			clean[i] = safeText(s)
+		} else {
+			clean[i] = arg
+		}
+	}
+	logger().Log(context.Background(), level, safeText(message), clean...)
 }
 
 func logger() *slog.Logger {
@@ -81,7 +94,7 @@ const allowSessionEnv = "RENFE_ALLOW_SESSION_ON_CUSTOM_HOST"
 // newClient builds a client carrying any stored session.
 func newClient(cfg config.Config) *client.Client {
 	cl := client.New()
-	cl.Logf = stderrLogf
+	cl.LogEvent = stderrEvent
 	// RENFE_BASE_URL points the client at an alternate host (a debugging proxy,
 	// a mock, a replay server) instead of production.
 	if u := os.Getenv("RENFE_BASE_URL"); u != "" {

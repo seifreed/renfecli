@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -121,6 +122,28 @@ func TestDoRetryGivesUpAndReportsTheLastError(t *testing.T) {
 	}
 	if len(logged) != 2 {
 		t.Errorf("each retry should be reported once, got %v", logged)
+	}
+}
+
+func TestRetryDiagnosticUsesStructuredWarningFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+	var gotLevel slog.Level
+	var gotMessage string
+	var gotAttrs []any
+	c.LogEvent = func(level slog.Level, message string, attrs ...any) {
+		gotLevel, gotMessage, gotAttrs = level, message, attrs
+	}
+	_, _ = c.doRetry("search", func() ([]byte, error) {
+		req, _ := c.newReq("GET", "/vol/inicio.do", nil, nil)
+		return c.do(req)
+	})
+	if gotLevel != slog.LevelWarn || gotMessage != "HTTP request throttled; retrying" || len(gotAttrs) == 0 {
+		t.Fatalf("missing structured retry warning: level=%v message=%q attrs=%v", gotLevel, gotMessage, gotAttrs)
 	}
 }
 

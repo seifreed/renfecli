@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"net/http/cookiejar"
@@ -41,6 +42,9 @@ type Client struct {
 	// on stderr; nil disables them. The library never writes to os.Stderr itself —
 	// the caller routes the output, keeping the client free of process I/O.
 	Logf func(format string, args ...any)
+	// LogEvent receives structured diagnostics when the caller supports levels.
+	// Logf remains as a compatibility fallback for existing embedders.
+	LogEvent func(level slog.Level, message string, args ...any)
 
 	// transportErr records why the uTLS Chrome transport could not initialise (nil
 	// when it did). New cannot log it — Logf is set by the caller afterwards — so
@@ -75,10 +79,12 @@ func New() *Client {
 	return c
 }
 
-// logf emits a diagnostic through the optional Logf hook (no-op when unset).
-func (c *Client) logf(format string, args ...any) {
-	if c.Logf != nil {
-		c.Logf(format, args...)
+// logEvent sends diagnostics to the structured hook, falling back for older callers.
+func (c *Client) logEvent(level slog.Level, message string, attrs ...any) {
+	if c.LogEvent != nil {
+		c.LogEvent(level, message, attrs...)
+	} else if c.Logf != nil {
+		c.Logf("%s %v", message, attrs)
 	}
 }
 
@@ -200,7 +206,7 @@ func (c *Client) newReq(method, path string, body io.Reader, extra map[string]st
 func (c *Client) do(req *http.Request) ([]byte, error) {
 	c.warnOnce.Do(func() {
 		if c.transportErr != nil {
-			c.logf("uTLS Chrome fingerprint unavailable (%v) — using the stdlib transport; requests may be challenged", c.transportErr)
+			c.logEvent(slog.LevelWarn, "TLS transport fallback", "error_type", fmt.Sprintf("%T", c.transportErr))
 		}
 	})
 	resp, err := c.HTTP.Do(req)
@@ -238,7 +244,8 @@ func (c *Client) doRetry(what string, fn func() ([]byte, error)) ([]byte, error)
 		}
 		wait := retryWait(err, backoff)
 		status, _ := HTTPStatus(err)
-		c.logf("throttled: HTTP %d on %s — retrying %d/%d in %s", status, what, attempt+1, maxRetries, wait.Round(time.Millisecond))
+		c.logEvent(slog.LevelWarn, "HTTP request throttled; retrying", "status", status, "operation", what,
+			"attempt", attempt+1, "max_attempts", maxRetries, "retry_after_ms", wait.Milliseconds())
 		time.Sleep(wait)
 		backoff *= 2
 	}
