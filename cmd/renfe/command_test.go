@@ -6,6 +6,7 @@ import (
 	"github.com/seifreed/renfecli/internal/store"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,27 @@ func TestStationCacheHitIsObservableWithoutStationData(t *testing.T) {
 	if !strings.Contains(stderr, `"msg":"station catalogue cache hit"`) ||
 		!strings.Contains(stderr, `"station_count":2`) || strings.Contains(stderr, "BARCELONA") {
 		t.Fatalf("unexpected station cache event: %s", stderr)
+	}
+}
+
+func TestCorruptStationCacheIsWarnedWithoutExposingContents(t *testing.T) {
+	t.Setenv("RENFE_CONFIG_DIR", t.TempDir())
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "debug")
+	const sentinel = "private-station-cache-value"
+	if err := os.WriteFile(store.Path(stationsCache), []byte(sentinel), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
+	defer srv.Close()
+	cl := client.New()
+	cl.BaseURL = srv.URL
+	cl.HTTP = &http.Client{Timeout: time.Second}
+	stderr := captureStderr(t, func() {
+		_, _ = loadStations(cl, false)
+	})
+	if !strings.Contains(stderr, `"msg":"station catalogue cache could not be read"`) || strings.Contains(stderr, sentinel) {
+		t.Fatalf("corrupt cache was not reported safely: %s", stderr)
 	}
 }
 

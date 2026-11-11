@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -30,7 +32,11 @@ type stationsFile struct {
 func loadStations(cl *client.Client, force bool) ([]client.Station, error) {
 	started := time.Now()
 	var cached stationsFile
-	haveCache := store.Load(stationsCache, &cached) == nil && len(cached.Stations) > 0
+	cacheErr := store.Load(stationsCache, &cached)
+	haveCache := cacheErr == nil && len(cached.Stations) > 0
+	if cacheErr != nil && !errors.Is(cacheErr, os.ErrNotExist) {
+		stderrEvent(slog.LevelWarn, "station catalogue cache could not be read", "component", "store", "error_type", fmt.Sprintf("%T", cacheErr))
+	}
 	// A timestamp in the future — a clock that was wrong when the file was
 	// written, or a hand-edited copy — makes time.Since negative, which would
 	// otherwise read as "fresh" forever.

@@ -12,7 +12,7 @@ La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. Los e
 
 El límite de despacho registra `command started` y un evento de finalización o fallo con el nombre del comando, resultado y `duration_ms`. Solo registra el nombre de operación; nunca argumentos, que pueden contener información de viaje o cuenta. Los comandos de ayuda/versión también quedan cubiertos.
 
-Las operaciones semánticas de almacenamiento registran el guardado de una sesión sin identidad ni cookie, y la caché de estaciones registra hit/refresco/fallback con conteo, antigüedad y duración. No se instrumenta la biblioteca `store` genérica para evitar estado global y mantenerla libre de dependencia del proceso.
+Las operaciones semánticas de almacenamiento registran lecturas fallidas de sesiones y catálogos, el guardado de una sesión sin identidad ni cookie, y la caché de estaciones con hit/refresco/fallback, conteo, antigüedad y duración. Un archivo ausente es normal; corrupción/permisos generan WARN. No se instrumenta la biblioteca `store` genérica para evitar estado global y mantenerla libre de dependencia del proceso.
 
 El cliente no depende del logger: `LogEvent` es opcional y el proceso lo conecta a `slog`; `Logf` sigue disponible como fallback para embedders existentes. Cada intercambio HTTP emite en DEBUG método, ruta sin query, estado/resultado y duración; los errores de transporte/lectura registran solo su tipo. Los reintentos son WARN con `status`, `operation`, `attempt`, `max_attempts` y `retry_after_ms`; el fallback TLS es WARN con tipo de error, sin volcar el mensaje del transporte. Errores HTTP exponen el estado y mantienen el cuerpo solo en el objeto para diagnóstico local; `Error()` no vuelca datos remotos potencialmente privados.
 
@@ -32,4 +32,4 @@ Además del ciclo de vida de comandos, la cobertura incluye resultados HTTP en D
 
 ## Revisión intermedia
 
-Tras añadir eventos de ciclo de vida, eventos HTTP DEBUG, persistencia/caché, niveles WARN y pruebas de serialización/redacción: arquitectura 6, cobertura 7, utilidad 7, estructura 8, correlación 2, seguridad 8, rendimiento 6, configuración 7, errores 8, pruebas 9. Media **6,8/10**. Es una valoración intermedia, no una puntuación final; falta correlación, instrumentación de todas las operaciones semánticas de almacenamiento y más pruebas de fallos, concurrencia y privacidad.
+Tras añadir eventos de ciclo de vida, eventos HTTP DEBUG, persistencia/caché, niveles WARN y pruebas de serialización/redacción: arquitectura 6, cobertura 8, utilidad 7, estructura 8, correlación 2, seguridad 8, rendimiento 6, configuración 7, errores 8, pruebas 9. Media **6,9/10**. Es una valoración intermedia, no una puntuación final; falta correlación, cobertura de todos los fallos de almacenamiento, concurrencia de logging y más pruebas de privacidad.
