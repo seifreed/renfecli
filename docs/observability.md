@@ -8,7 +8,7 @@ Puntuación inicial (0–10): arquitectura 4, cobertura 3, utilidad 4, estructur
 
 ## Implementación
 
-La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. Los eventos tienen `service=renfecli`, `component`, `event_name` normalizado, timestamp y nivel; el texto legible es el formato por defecto y JSON se activa con `RENFE_LOG_FORMAT=json`. `RENFE_LOG_LEVEL` admite `debug`, `info` (predeterminado), `warn` y `error`; valores desconocidos usan `info`. TRACE y FATAL no forman parte de los niveles estándar de `slog` y no se necesitan para estos flujos.
+La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. El handler se cachea según formato/nivel y serializa escrituras concurrentes; su writer sigue el `os.Stderr` actual para permitir captura/redirección del proceso. Los eventos tienen `service=renfecli`, `component`, `event_name` normalizado, timestamp y nivel; el texto legible es el formato por defecto y JSON se activa con `RENFE_LOG_FORMAT=json`. `RENFE_LOG_LEVEL` admite `debug`, `info` (predeterminado), `warn` y `error`; valores desconocidos usan `info`. TRACE y FATAL no forman parte de los niveles estándar de `slog` y no se necesitan para estos flujos.
 
 El límite de despacho registra `command started` y un evento de finalización o fallo con el nombre del comando, resultado y `duration_ms`. Solo registra el nombre de operación; nunca argumentos, que pueden contener información de viaje o cuenta. Los comandos de ayuda/versión también quedan cubiertos.
 

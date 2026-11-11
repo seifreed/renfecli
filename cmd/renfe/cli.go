@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/seifreed/renfecli/internal/client"
@@ -45,13 +46,30 @@ func normalizedEventName(message string) string {
 	return b.String()
 }
 
-func logger() *slog.Logger {
-	return newLogger()
+type currentStderr struct{}
+
+func (currentStderr) Write(p []byte) (int, error) { return os.Stderr.Write(p) }
+
+var loggerCache struct {
+	sync.Mutex
+	level, format string
+	logger        *slog.Logger
 }
 
-func newLogger() *slog.Logger {
+func logger() *slog.Logger {
+	levelName, format := strings.ToLower(os.Getenv("RENFE_LOG_LEVEL")), strings.ToLower(os.Getenv("RENFE_LOG_FORMAT"))
+	loggerCache.Lock()
+	defer loggerCache.Unlock()
+	if loggerCache.logger == nil || loggerCache.level != levelName || loggerCache.format != format {
+		loggerCache.level, loggerCache.format = levelName, format
+		loggerCache.logger = newLogger(levelName, format)
+	}
+	return loggerCache.logger
+}
+
+func newLogger(levelName, format string) *slog.Logger {
 	level := new(slog.LevelVar)
-	switch strings.ToLower(os.Getenv("RENFE_LOG_LEVEL")) {
+	switch levelName {
 	case "debug":
 		level.Set(slog.LevelDebug)
 	case "warn", "warning":
@@ -62,9 +80,9 @@ func newLogger() *slog.Logger {
 		level.Set(slog.LevelInfo)
 	}
 	opts := &slog.HandlerOptions{Level: level}
-	handler := slog.Handler(slog.NewTextHandler(os.Stderr, opts))
-	if strings.EqualFold(os.Getenv("RENFE_LOG_FORMAT"), "json") {
-		handler = slog.NewJSONHandler(os.Stderr, opts)
+	handler := slog.Handler(slog.NewTextHandler(currentStderr{}, opts))
+	if format == "json" {
+		handler = slog.NewJSONHandler(currentStderr{}, opts)
 	}
 	return slog.New(handler.WithAttrs([]slog.Attr{slog.String("service", "renfecli")}))
 }
