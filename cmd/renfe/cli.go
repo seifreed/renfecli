@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -16,7 +17,31 @@ import (
 // warnings) to stderr, prefixed, so they never mix with --json data on stdout.
 // It is a var so tests can capture what would be logged.
 var stderrLogf = func(format string, args ...any) {
-	fmt.Fprintln(os.Stderr, "renfe: "+safeText(fmt.Sprintf(format, args...)))
+	logger().Info(safeText(fmt.Sprintf(format, args...)))
+}
+
+func logger() *slog.Logger {
+	return newLogger()
+}
+
+func newLogger() *slog.Logger {
+	level := new(slog.LevelVar)
+	switch strings.ToLower(os.Getenv("RENFE_LOG_LEVEL")) {
+	case "debug":
+		level.Set(slog.LevelDebug)
+	case "warn", "warning":
+		level.Set(slog.LevelWarn)
+	case "error":
+		level.Set(slog.LevelError)
+	default:
+		level.Set(slog.LevelInfo)
+	}
+	opts := &slog.HandlerOptions{Level: level}
+	handler := slog.Handler(slog.NewTextHandler(os.Stderr, opts))
+	if strings.EqualFold(os.Getenv("RENFE_LOG_FORMAT"), "json") {
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	}
+	return slog.New(handler.WithAttrs([]slog.Attr{slog.String("service", "renfecli")}))
 }
 
 // common flags shared by every subcommand.

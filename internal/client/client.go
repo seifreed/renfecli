@@ -117,7 +117,7 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("renfe api: HTTP %d: %s", e.Status, truncate(e.Body, 300))
+	return fmt.Sprintf("renfe api: HTTP %d", e.Status)
 }
 
 // HTTPStatus reports the HTTP status carried by err when it is (or wraps) an

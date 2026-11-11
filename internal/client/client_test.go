@@ -139,16 +139,11 @@ func TestHTTPStatus(t *testing.T) {
 	}
 }
 
-func TestAPIErrorTruncatesTheBody(t *testing.T) {
-	// An error body is whatever the WAF felt like sending; the message must stay
-	// readable, and must not cut a multibyte rune in half.
-	e := &APIError{Status: 403, Body: strings.Repeat("á", 500)}
+func TestAPIErrorDoesNotExposeRemoteBody(t *testing.T) {
+	e := &APIError{Status: 403, Body: "private-account-detail"}
 	msg := e.Error()
-	if !strings.Contains(msg, "HTTP 403") || !strings.HasSuffix(msg, "…") {
+	if !strings.Contains(msg, "HTTP 403") || strings.Contains(msg, "private-account-detail") {
 		t.Errorf("unexpected message: %q", msg)
-	}
-	if strings.ContainsRune(msg, '�') {
-		t.Error("truncation split a rune")
 	}
 }
 

@@ -1,0 +1,27 @@
+# Logging y observabilidad
+
+## Auditoría inicial
+
+renfecli es un CLI Go: `cmd/renfe` despacha comandos; `internal/client` hace HTTP contra Renfe; `internal/config` lee TOML y `internal/store` persiste catálogo/sesión. No hay servidor, base de datos, colas ni servicios en segundo plano salvo `session keep`. Los datos del comando van a stdout y los diagnósticos a stderr. Antes de este cambio ya existía un callback opcional del cliente para reintentos y fallback TLS, más avisos de CLI en texto libre; faltaban niveles, formato configurable, eventos estructurados y criterios centralizados. Los errores HTTP incluían hasta 300 caracteres de respuesta remota.
+
+Puntuación inicial (0–10): arquitectura 4, cobertura 3, utilidad 4, estructura 1, correlación 1, seguridad 4, resiliencia 3, configuración 2, errores 4, pruebas 3. Media: **2,9/10**. El CLI no necesita métricas/tracing distribuidos: una invocación es un proceso local y no hay servidor ni llamadas entre servicios.
+
+## Implementación
+
+La CLI usa `log/slog` de la biblioteca estándar y escribe solo en stderr. Los eventos tienen `service=renfecli`; el texto legible es el formato por defecto y JSON se activa con `RENFE_LOG_FORMAT=json`. `RENFE_LOG_LEVEL` admite `debug`, `info` (predeterminado), `warn` y `error`; valores desconocidos usan `info`. TRACE y FATAL no forman parte de los niveles estándar de `slog` y no se necesitan para estos flujos.
+
+El cliente no depende del logger: su callback opcional conserva la separación entre biblioteca y proceso. Reintentos y fallback de transporte son diagnósticos recuperables. Errores HTTP exponen el estado y mantienen el cuerpo solo en el objeto para diagnóstico local; `Error()` no vuelca datos remotos potencialmente privados.
+
+No registrar cookies, cabeceras, payloads, itinerarios ni cuerpos HTTP. Mensajes que contengan datos externos deben pasar por `safeText`; campos de una línea por `safeField`. No incluir secretos como atributos estructurados. Los errores operativos se presentan una vez en el límite CLI; fallos recuperables se emiten donde se decide la recuperación.
+
+Ejemplo JSON:
+
+```json
+{"time":"2026-11-11T12:00:00Z","level":"INFO","msg":"throttled: HTTP 429 on /vol/... — retrying 1/3 in 500ms","service":"renfecli"}
+```
+
+Para diagnosticar: enviar stderr a la herramienta del sistema; usar `RENFE_LOG_FORMAT=json` para ingestión y `RENFE_LOG_LEVEL=debug` cuando existan eventos de diagnóstico de ese nivel. No hay rotación de archivos ni destino remoto: los opera el entorno que lanza el proceso.
+
+## Limitaciones conocidas
+
+La cobertura se limita a fallos de recuperación y avisos que ya existían; no se han añadido logs por cada petición correcta porque generarían ruido y el CLI no expone un modo verbose. No hay correlación/tracing, métricas, sampling ni buffering asíncrono; una única ejecución local no justifica esas dependencias. `slog` estándar permite niveles y salida estructurada, pero los eventos actuales todavía son mensajes heredados, no un esquema operacional completo. Por ello no se reclama 10/10.
