@@ -35,6 +35,8 @@ func main() { os.Exit(run(os.Args[1:])) }
 // so it is testable without os.Exit.
 func run(args []string) int {
 	if len(args) < 1 {
+		correlationID := observability.NewCorrelationID()
+		logger().Warn("command missing", append([]any{"event_name", "command_rejected", "component", "cli", "operation", "dispatch", "error_code", "MISSING_COMMAND"}, correlationAttrs(correlationID)...)...)
 		usage()
 		return 2
 	}

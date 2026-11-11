@@ -388,6 +388,22 @@ func TestRunUnknownCommandIsRejectedWithWarning(t *testing.T) {
 	}
 }
 
+func TestRunWithoutCommandIsRejectedWithWarning(t *testing.T) {
+	t.Setenv("RENFE_LOG_FORMAT", "json")
+	t.Setenv("RENFE_LOG_LEVEL", "info")
+	var code int
+	stderr := captureStderr(t, func() { code = run(nil) })
+	if code != 2 {
+		t.Fatalf("run returned %d, want usage error code 2", code)
+	}
+	if !strings.Contains(stderr, `"event_name":"command_rejected"`) || !strings.Contains(stderr, `"error_code":"MISSING_COMMAND"`) {
+		t.Fatalf("missing command lacked a structured warning: %s", stderr)
+	}
+	if !strings.Contains(stderr, `"correlation_id":"`) {
+		t.Fatalf("missing command warning lacked correlation: %s", stderr)
+	}
+}
+
 func TestRunCommandHelpCompletesSuccessfully(t *testing.T) {
 	t.Setenv("RENFE_LOG_FORMAT", "json")
 	t.Setenv("RENFE_LOG_LEVEL", "info")
